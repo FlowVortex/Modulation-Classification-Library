@@ -64,20 +64,20 @@ class ModelConfig:
 
 class TestModels(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cls.batch_size = 4
         # (Batch, Channels, Length)
         cls.common_input = torch.rand((cls.batch_size, 2, 128)).to(cls.device)
 
-    def _run_test(self, model_instance, input_data, expected_shape):
+    def _run_test(self, model_instance, input_data, expected_shape) -> None:
         model_instance.to(self.device)
         model_instance.eval()
         with torch.no_grad():
             outputs = model_instance(input_data)
         self.assertEqual(outputs.shape, expected_shape)
 
-    def test_all_models(self):
+    def test_all_models(self) -> None:
         base_cfg = ModelConfig()
 
         test_cases = [
@@ -98,14 +98,14 @@ class TestModels(unittest.TestCase):
                 model = model_fn(configs=cfg)
                 self._run_test(model, self.common_input, (4, 11))
 
-    def test_DenseCNN(self):
+    def test_DenseCNN(self) -> None:
         """DenseCNN"""
         cfg = ModelConfig(n_classes=1000)
         model = DenseCNN.model(configs=cfg)
         img_input = torch.rand((2, 3, 224, 224)).to(self.device)
         self._run_test(model, img_input, (2, 1000))
 
-    def test_MCLDNN(self):
+    def test_MCLDNN(self) -> None:
         """MCLDNN"""
         model = MCLDNN.Model(num_classes=11)
         x = self.common_input.unsqueeze(1)  # (batch, 1, 2, L)

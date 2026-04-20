@@ -6,7 +6,7 @@ import copy
 
 
 class Conv_Block(nn.Module):
-    def __init__(self, in_channel, out_channel):
+    def __init__(self, in_channel: int, out_channel: int) -> None:
         super(Conv_Block, self).__init__()
         self.in_c = in_channel
         self.out_c = out_channel
@@ -18,7 +18,7 @@ class Conv_Block(nn.Module):
             nn.BatchNorm2d(self.out_c),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         """
         x: [batchsize, C, H, W]
         """
@@ -28,7 +28,7 @@ class Conv_Block(nn.Module):
 
 
 class MultiScaleModule(nn.Module):
-    def __init__(self, out_channel):
+    def __init__(self, out_channel: int = 128) -> None:
         super(MultiScaleModule, self).__init__()
         self.out_c = out_channel
 
@@ -51,17 +51,17 @@ class MultiScaleModule(nn.Module):
             nn.BatchNorm2d(self.out_c // 3),
         )
 
-    def forward(self, x):
-        y1 = self.conv_3(x)
-        y2 = self.conv_5(x)
-        y3 = self.conv_7(x)
+    def forward(self, x_enc: torch.Tensor) -> torch.Tensor:
+        y1 = self.conv_3(x_enc)
+        y2 = self.conv_5(x_enc)
+        y3 = self.conv_7(x_enc)
         x = torch.cat([y1, y2, y3], dim=1)
 
         return x
 
 
 class TinyMLP(nn.Module):
-    def __init__(self, N):
+    def __init__(self, N: int) -> None:
         super(TinyMLP, self).__init__()
         self.N = N
 
@@ -73,18 +73,18 @@ class TinyMLP(nn.Module):
             nn.Tanh(),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         x = self.mlp(x)
         return x
 
 
 class AdaCorrModule(nn.Module):
-    def __init__(self, N):
+    def __init__(self, N: int) -> None:
         super(AdaCorrModule, self).__init__()
         self.Im = TinyMLP(N)
         self.Re = TinyMLP(N)
 
-    def forward(self, x):
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         # x:[N, C_out, 1, W]
         x_init = copy.deepcopy(x)
         x = torch.fft.fft(x, dim=-1)
@@ -103,7 +103,9 @@ class AdaCorrModule(nn.Module):
 
 
 class FeaFusionModule(nn.Module):
-    def __init__(self, num_attention_heads, input_size, hidden_size):
+    def __init__(
+        self, num_attention_heads: int, input_size: int, hidden_size: int
+    ) -> None:
         super(FeaFusionModule, self).__init__()
         if hidden_size % num_attention_heads != 0:
             raise ValueError(
@@ -119,12 +121,12 @@ class FeaFusionModule(nn.Module):
         self.value_layer = nn.Linear(input_size, hidden_size)
         self.dropout = nn.Dropout(0.5)
 
-    def trans_to_multiple_heads(self, x):
+    def trans_to_multiple_heads(self, x: torch.FloatTensor) -> torch.FloatTensor:
         new_size = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(new_size)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, x):
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         key = self.key_layer(x)
         query = self.query_layer(x)
         value = self.value_layer(x)
@@ -149,8 +151,9 @@ class model(nn.Module):
     def __init__(
         self,
         configs,
-    ):
+    ) -> None:
         super(model, self).__init__()
+
         self.sig_len = configs.seq_len
         self.extend_channel = configs.d_model
         self.latent_dim = configs.d_ff
@@ -182,8 +185,9 @@ class model(nn.Module):
             nn.Linear(self.latent_dim, self.n_classes),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.FlaotTensor) -> torch.FloatTensor:
         # x = x / x.norm(p=2, dim=-1, keepdim=True)
+
         x = x.unsqueeze(1)
         x = self.ACM(x)
         x = x / x.norm(p=2, dim=-1, keepdim=True)
