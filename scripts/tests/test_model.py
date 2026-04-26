@@ -22,6 +22,7 @@ from model import (
     MCLDNN,
     MTAMR,
     PETCGDNN,
+    ModernTCN,
 )
 
 
@@ -61,6 +62,18 @@ class ModelConfig:
     bn_size: int = 4
     reduction: float = 0.5
 
+    # ModernTCN 
+    dims: List[int] = field(default_factory=lambda: [64, 128]) 
+    num_blocks: List[int] = field(default_factory=lambda: [2, 2])
+    large_size: List[int] = field(default_factory=lambda: [31, 29])
+    small_size: List[int] = field(default_factory=lambda: [5, 5])
+    patch_size: int = 8
+    patch_stride: int = 4
+    downsample_ratio: int = 2
+    ffn_ratio: int = 4
+    class_dropout: float = 0.1
+    revin: bool = True
+
 
 class TestModels(unittest.TestCase):
     @classmethod
@@ -90,6 +103,7 @@ class TestModels(unittest.TestCase):
             (MCformer.MCformer, {"d_model": 64, "n_heads": 8}, "MCformer"),
             (MTAMR.model, {"d_model": 64}, "MTAMR"),
             (PETCGDNN.model, {}, "PETCGDNN"),
+            (ModernTCN.model, {"dims": [64, 128], "num_blocks": [1, 1], }, "ModernTCN"),
         ]
 
         for model_fn, overrides, name in test_cases:

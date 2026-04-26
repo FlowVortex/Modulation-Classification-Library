@@ -185,7 +185,7 @@ class model(nn.Module):
             nn.Linear(self.latent_dim, self.n_classes),
         )
 
-    def forward(self, x: torch.FlaotTensor) -> torch.FloatTensor:
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         # x = x / x.norm(p=2, dim=-1, keepdim=True)
 
         x = x.unsqueeze(1)
