@@ -33,11 +33,11 @@ class PET(nn.Module):
         return x2
 
 
-class model(nn.Module):
+class Model(nn.Module):
     """`PETCGDNN <https://ieeexplore.ieee.org/abstract/document/9507514>`_ backbone
     The input for PETCGDNN is an N*L*2 frame
     Args:
-        frame_length (int): the frame length equal to number of sample points
+        seq_len (int): the frame length equal to number of sample points
         n_classes (int): number of classes for classification.
             The default value is -1, which uses the backbone as
             a feature extractor without the top classifier.
@@ -47,7 +47,7 @@ class model(nn.Module):
         self,
         configs,
     ) -> None:
-        super(model, self).__init__()
+        super(Model, self).__init__()
 
         self.n_classes = configs.n_classes
         self.seq_len = configs.seq_len
@@ -72,12 +72,3 @@ class model(nn.Module):
         x = self.classifier(x[:, -1, :])
         return x
 
-
-if __name__ == "__main__":
-    device = "GPU" if torch.cuda.is_available() else "cpu"
-    model = model(num_classes=26, frame_length=1024).to(device)
-    x = torch.rand((400, 2, 1024)).to(device)
-    start = time.time()
-    y = model(x)
-    end = time.time()
-    print((end - start) / 400.0)

@@ -147,12 +147,22 @@ class FeaFusionModule(nn.Module):
         return context
 
 
-class model(nn.Module):
+class Model(nn.Module):
+    """`AMCNet <https://ieeexplore.ieee.org/document/10097070>`_ backbone
+    The input for AMCNet is a 2*L frame (represented as [Batch, 2, seq_len])
+
+    Args:
+        seq_len (int): the frame length equal to number of sample points (L).
+        n_classes (int): number of classes for classification.
+        d_model (int): the extension channel for MultiScaleModule (out_channel).
+        d_ff (int): the dimension of the feedforward network / latent dimension.
+        n_heads (int): the number of attention heads in FeaFusionModule.
+    """
     def __init__(
         self,
         configs,
     ) -> None:
-        super(model, self).__init__()
+        super(Model, self).__init__()
 
         self.sig_len = configs.seq_len
         self.extend_channel = configs.d_model

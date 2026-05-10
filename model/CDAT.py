@@ -132,13 +132,20 @@ class CDATBlock(nn.Module):
         return x
 
 
-class model(nn.Module):
-    """
-    CDAT
+class Model(nn.Module):
+    """`CDAT <https://link.springer.com/article/10.1007/s10489-024-06202-6>`_ backbone
+    The input for CDAT is a 2*L frame (represented as [Batch, 2, seq_len])
+
+    Args:
+        configs: A configuration object containing:
+            d_model (int): the initial embedding dimension (base channel size).
+            n_heads (int): number of heads in the Convolutional Dual-Attention.
+            d_ff (int): the hidden dimension of the feedforward network in CDAT blocks.
+            n_classes (int): number of classes for classification.
     """
 
     def __init__(self, configs):
-        super(model, self).__init__()
+        super(Model, self).__init__()
 
         # channel
         c = configs.d_model

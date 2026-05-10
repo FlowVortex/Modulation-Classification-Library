@@ -98,7 +98,7 @@ class FeatureExtraction(nn.Module):
         return torch.cat([h_cnn, h_lstm], dim=1)
 
 
-class model(nn.Module):
+class Model(nn.Module):
     """`A Lightweight Deep Learning Model for Automatic Modulation Classification Using Dual-Path Deep Residual Shrinkage Network <https://doi.org/10.3390/ai6080195>`_ backbone
     The input for DP-DRSN is a 1*2*L frame
     Args:
@@ -107,7 +107,7 @@ class model(nn.Module):
     """
 
     def __init__(self, configs):
-        super(model, self).__init__()
+        super(Model, self).__init__()
         self.n_classes = configs.n_classes
 
         # Create dual-path feature extraction for IQ and AP signals

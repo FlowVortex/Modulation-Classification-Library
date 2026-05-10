@@ -20,8 +20,9 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:, : x.size(1), :]
 
 
-class model(nn.Module):
-    """`MTAMR <https://ieeexplore.ieee.org/document/10471243>`_ (An EffectiveMasked Transformer for AMR)
+class Model(nn.Module):
+    """`MTAMR <https://ieeexplore.ieee.org/document/10471243>`_ 
+    An EffectiveMasked Transformer for AMR
     The model processes multimodal sequences (IQ, AP, FT) for modulation recognition.
 
     Args:
@@ -29,7 +30,7 @@ class model(nn.Module):
     """
 
     def __init__(self, configs):
-        super(model, self).__init__()
+        super(Model, self).__init__()
         self.d_model = configs.d_model
         self.seq_len = configs.seq_len
 
@@ -212,40 +213,3 @@ class model(nn.Module):
         )
 
         return loss_total, loss_mp, loss_ce
-
-
-import unittest
-
-
-class MTAMRConfigs:
-    """Configuration for the MTAMR model"""
-
-    seq_len = 128
-    d_model = 96
-    n_heads = 4
-    n_layers = 3
-    n_classes = 11
-    dropout = 0.1
-
-
-class TestMTAMR(unittest.TestCase):
-    """Test the MTAMR (Masked Transformer for AMR) model"""
-
-    # 模拟输入数据: (Batch_size=4, Channels=2, Seq_len=128)
-    inputs = torch.rand((4, 2, 128))
-
-    def test_MTAMR(self) -> None:
-        """Test the MTAMR model forward pass and output shapes"""
-
-        configs = MTAMRConfigs()
-        model = model(configs)
-
-        model.eval()
-        with torch.no_grad():
-            logits = model(self.inputs, mask_ratio=0.0, return_all=False)
-
-            self.assertEqual(logits.shape, (4, 11))
-
-
-if __name__ == "__main__":
-    unittest.main()

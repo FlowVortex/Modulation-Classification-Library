@@ -128,51 +128,79 @@ class Modern_Stage(nn.Module):
         return x
 
 # --- ModernTCN ---
+class Model(nn.Module):
+    """`ModernTCN <https://openreview.net/forum?id=vpJMJerXHU>`_ backbone
+    A Modern Time Series Convolutional Network that leverages large kernels and 
+    separable FFNs for time series modeling.
+    The input for ModernTCN is a 2*L frame (represented as [Batch, 2, seq_len]).
 
-class model(nn.Module):
+    Args:
+        configs: A configuration object containing:
+            seq_len (int): the frame length equal to number of sample points (L).
+            input_channels (int): number of input variables (e.g., 2 for I/Q signals).
+            patch_len (int): kernel size of the initial stem convolution.
+            patch_stride (int): stride of the initial stem convolution.
+            n_layers (list of int): number of Modern_Blocks in each of the stages.
+            dims (list of int): dimension (channels) of each stage.
+            large_size (list of int): large kernel sizes for depthwise conv in each stage.
+            small_size (list of int): small kernel sizes for reparameterization in each stage.
+            ffn_ratio (int): expansion ratio for the ConvFFN modules.
+            downsample_ratio (int): factor used for downsampling between stages.
+            dropout (float): dropout rate used within the Modern_Blocks.
+            class_dropout (float): dropout rate used before the final classifier.
+            n_classes (int): number of classes for classification.
+    """
     def __init__(self, configs) -> None:
-        super(model, self).__init__()
+        super(Model, self).__init__()
         
         # 基础配置
         self.seq_len = configs.seq_len
         self.n_vars = configs.input_channels
         self.n_classes = configs.n_classes
-
-        # 记录参数用于 forward 中的 Padding
-        self.patch_size = configs.patch_size
-        self.patch_stride = configs.patch_stride
-        self.downsample_ratio = configs.downsample_ratio
+        self.patch_size = configs.patch_len
+        self.patch_stride = configs.stride
         
-        # RevIN 归一化层 (可选)
+        # 映射 ModernTCN 特有结构参数
+        # 假设固定为 3 个 Stage 以符合原始架构设计，每个 Stage 的 block 数由 n_layers 决定
+        num_stages = 3
+        stg_num_blocks = [configs.n_layers] * num_stages
+        stg_dims = [configs.d_model, configs.d_model * 2, configs.d_model * 4]
+        stg_large_size = [31, 21, 11]
+        stg_small_size = [5, 5, 5]
+        
+        # 映射 FFN 扩展比例 (d_ff / d_model)
+        ffn_ratio = configs.d_ff // configs.d_model
+        self.downsample_ratio = 2
+
         self.revin = RevIN(self.n_vars) if getattr(configs, 'revin', False) else None
 
         # --- Stem & Downsampling ---
         self.downsample_layers = nn.ModuleList()
         
-        # Stem Layer
+        # Stem Layer (Stage 0)
         stem = nn.Sequential(
-            nn.Conv1d(1, configs.dims[0], kernel_size=configs.patch_size, stride=configs.patch_stride),
-            nn.BatchNorm1d(configs.dims[0])
+            nn.Conv1d(1, stg_dims[0], kernel_size=self.patch_size, stride=self.patch_stride),
+            nn.BatchNorm1d(stg_dims[0])
         )
         self.downsample_layers.append(stem)
 
-        # Downsampling Layers
-        for i in range(len(configs.num_blocks) - 1):
+        # Downsampling Layers (Stage 1 到 Stage N)
+        for i in range(num_stages - 1):
             down = nn.Sequential(
-                nn.BatchNorm1d(configs.dims[i]),
-                nn.Conv1d(configs.dims[i], configs.dims[i+1], 
-                          kernel_size=configs.downsample_ratio, stride=configs.downsample_ratio)
+                nn.BatchNorm1d(stg_dims[i]),
+                nn.Conv1d(stg_dims[i], stg_dims[i+1], 
+                          kernel_size=self.downsample_ratio, stride=self.downsample_ratio)
             )
             self.downsample_layers.append(down)
 
         self.stages = nn.ModuleList()
-        for i in range(len(configs.num_blocks)):
+        for i in range(num_stages):
             stage = Modern_Stage(
-                num_blocks=configs.num_blocks[i],
-                ffn_ratio=configs.ffn_ratio,
-                large_size=configs.large_size[i],
-                small_size=configs.small_size[i],
-                dmodel=configs.dims[i],
+                num_blocks=stg_num_blocks[i],
+                ffn_ratio=ffn_ratio,
+                large_size=stg_large_size[i],
+                small_size=stg_small_size[i],
+                dmodel=stg_dims[i],
                 nvars=self.n_vars,
                 drop=configs.dropout
             )
@@ -180,24 +208,14 @@ class model(nn.Module):
 
         # --- Classification Head ---
         patch_num = self.seq_len // self.patch_stride
-        final_len = patch_num // (self.downsample_ratio ** (len(configs.num_blocks) - 1))
-        self.head_nf = configs.dims[-1] * final_len
+        final_len = patch_num // (self.downsample_ratio ** (num_stages - 1))
+        self.head_nf = stg_dims[-1] * final_len
         
-        self.class_dropout = nn.Dropout(configs.class_dropout)
+        self.class_dropout = nn.Dropout(configs.dropout)
         self.classifier = nn.Linear(self.n_vars * self.head_nf, self.n_classes)
 
     def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
-        """
-        Input x: [Batch, Vars, Seq_len] 
-        """
-        
-        # 1. 实例归一化 (RevIN)
-        if self.revin:
-            x = self.revin(x, 'norm')
-
-        # 2. Backbone
-        # [B, M, 1, L] 
-        x = x.unsqueeze(-2)
+        x = x.unsqueeze(-2) # [B, M, 1, L]
         
         for i in range(len(self.stages)):
             B, M, D, N = x.shape
@@ -213,30 +231,18 @@ class model(nn.Module):
                     pad_len = self.downsample_ratio - (N % self.downsample_ratio)
                     x = torch.cat([x, x[:, :, -pad_len:]], dim=-1)
             
-            # Stem 或 下采样处理
             x = self.downsample_layers[i](x)
-            
-            # 还原形状并进入 Modern Stage
             _, D_new, N_new = x.shape
             x = x.reshape(B, M, D_new, N_new)
             x = self.stages[i](x)
 
-        # 3. ModernTCN Classification
-        # 激活层
         x = F.gelu(x)
-        # Dropout
         x = self.class_dropout(x)
-        # [B, M, D, N] -> [B, M*D*N]
         x = x.reshape(x.shape[0], -1)
         y = self.classifier(x)
-
         return y
 
     def structural_reparam(self) -> None:
-        """
-        结构化重参数化：将训练时的多分支卷积融合为推理时的单路卷积
-        """
         for m in self.modules():
             if hasattr(m, 'merge_kernel'):
-                # 如果定义了融合逻辑，此处调用
                 pass

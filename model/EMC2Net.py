@@ -71,12 +71,22 @@ class ResidualBlock(nn.Module):
         return self.relu(out)
 
 
-class model(nn.Module):
+class Model(nn.Module):
+    """`EMC2-Net <https://ieeexplore.ieee.org/abstract/document/10096687>`_ backbone
+    Equalized Matching-filtering and Constellation-Consistency Network.
+    The input for EMC2-Net is a 2*L frame (represented as [Batch, 2, seq_len]).
+
+    Args:
+        seq_len (int): the frame length equal to number of sample points (L).
+        decimation_factor (int): the factor used for downsampling/decimation 
+            (e.g., 8 to convert 8192 samples to 1024 symbols).
+        n_classes (int): number of classes for classification.
+    """
     def __init__(
         self,
         configs,
     ) -> None:
-        super(model, self).__init__()
+        super(Model, self).__init__()
 
         self.n_classes = configs.n_classes
         self.seq_len = configs.seq_len
@@ -86,7 +96,7 @@ class model(nn.Module):
             ResidualBlock(channels=2, kernel_size=65),
             ResidualBlock(channels=2, kernel_size=65),
         )
-        self.decimation_factor = configs.decimation_factor
+        self.decimation_factor = getattr(configs, "decimation_factor", 1)
 
         # 2. Classifier (分类器部分: Set Transformer)
         # 输入维度是 2 (I/Q), 映射到 128 维
@@ -95,7 +105,7 @@ class model(nn.Module):
         self.isab2 = ISAB(dim_in=128, dim_out=128, n_heads=4, num_inds=64)
         self.pma = PMA(d_model=128, n_heads=4, num_seeds=1)
 
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(configs.dropout)
         self.fc_out = nn.Linear(128, configs.n_classes)
 
     def forward(self, x):
@@ -133,16 +143,3 @@ class model(nn.Module):
         return logits
 
 
-class EMC2NetConfigs:
-    seq_len = 128
-    n_classes = 11
-    decimation_factor = 8
-
-
-if __name__ == "__main__":
-    # 模拟输入: Batch=16, 2通道(I/Q), 长度8192
-    model = model(configs=EMC2NetConfigs())
-    sample_input = torch.randn(16, 2, 8192)
-    output = model(sample_input)
-    print(f"输入形状: {sample_input.shape}")
-    print(f"输出形状: {output.shape}")  # 应为 (16, 8)

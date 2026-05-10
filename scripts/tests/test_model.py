@@ -7,6 +7,7 @@ from typing import List, Tuple, Any
 
 import sys
 
+# Setting up project root for imports
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
@@ -42,15 +43,7 @@ class ModelConfig:
     decimation_factor: int = 8
 
     # InceptionTime
-    n_filters: int = 32
-    kernel_sizes: List[int] = field(default_factory=lambda: [9, 19, 39])
-    bottleneck_channels: int = 32
     n_blocks: int = 6
-    activation: str = "relu"
-    bias: bool = False
-    use_global_avg_pool: bool = True
-    max_pool_size: int = 1
-    use_residual: bool = True
     batch_size: int = 4
 
     # AMCNet
@@ -63,16 +56,8 @@ class ModelConfig:
     reduction: float = 0.5
 
     # ModernTCN 
-    dims: List[int] = field(default_factory=lambda: [64, 128]) 
-    num_blocks: List[int] = field(default_factory=lambda: [2, 2])
-    large_size: List[int] = field(default_factory=lambda: [31, 29])
-    small_size: List[int] = field(default_factory=lambda: [5, 5])
-    patch_size: int = 8
-    patch_stride: int = 4
-    downsample_ratio: int = 2
-    ffn_ratio: int = 4
-    class_dropout: float = 0.1
-    revin: bool = True
+    patch_len: int = 8
+    stride: int = 4
 
 
 class TestModels(unittest.TestCase):
@@ -80,7 +65,7 @@ class TestModels(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         cls.batch_size = 4
-        # (Batch, Channels, Length)
+        # Standard IQ Input: (Batch, Channels, Length)
         cls.common_input = torch.rand((cls.batch_size, 2, 128)).to(cls.device)
 
     def _run_test(self, model_instance, input_data, expected_shape) -> None:
@@ -94,36 +79,26 @@ class TestModels(unittest.TestCase):
         base_cfg = ModelConfig()
 
         test_cases = [
-            (AMCNet.model, {"d_model": 36, "n_heads": 2, "d_ff": 512}, "AMCNet"),
-            (CDAT.model, {"d_model": 32, "n_heads": 4}, "CDAT"),
-            (CTNet.model, {"d_model": 64}, "CTNet"),
-            (DP_DRSN.model, {"d_model": 63}, "DP_DRSN"),
-            (EMC2Net.model, {}, "EMC2Net"),
-            (InceptionTime.model, {}, "InceptionTime"),
+            (AMCNet.Model, {"d_model": 36, "n_heads": 2, "d_ff": 512}, "AMCNet"),
+            (CDAT.Model, {"d_model": 32, "n_heads": 4}, "CDAT"),
+            (CTNet.Model, {"d_model": 64}, "CTNet"),
+            (DP_DRSN.Model, {"d_model": 63}, "DP_DRSN"),
+            (EMC2Net.Model, {}, "EMC2Net"),
+            (InceptionTime.Model, {"d_model": 32}, "InceptionTime"),
             (MCformer.MCformer, {"d_model": 64, "n_heads": 8}, "MCformer"),
-            (MTAMR.model, {"d_model": 64}, "MTAMR"),
-            (PETCGDNN.model, {}, "PETCGDNN"),
-            (ModernTCN.model, {"dims": [64, 128], "num_blocks": [1, 1], }, "ModernTCN"),
+            (MCLDNN.Model, {}, "MCLDNN"),
+            (MTAMR.Model, {"d_model": 64}, "MTAMR"),
+            (PETCGDNN.Model, {}, "PETCGDNN"),
+            (ModernTCN.Model, {}, "ModernTCN"),
+            # DenseCNN integrated: now takes (Batch, 2, Length)
+            (DenseCNN.Model, {"d_model": 64, "growth_rate": 12}, "DenseCNN"),
         ]
 
         for model_fn, overrides, name in test_cases:
             with self.subTest(model=name):
                 cfg = ModelConfig(**{**asdict(base_cfg), **overrides})
                 model = model_fn(configs=cfg)
-                self._run_test(model, self.common_input, (4, 11))
-
-    def test_DenseCNN(self) -> None:
-        """DenseCNN"""
-        cfg = ModelConfig(n_classes=1000)
-        model = DenseCNN.model(configs=cfg)
-        img_input = torch.rand((2, 3, 224, 224)).to(self.device)
-        self._run_test(model, img_input, (2, 1000))
-
-    def test_MCLDNN(self) -> None:
-        """MCLDNN"""
-        model = MCLDNN.Model(num_classes=11)
-        x = self.common_input.unsqueeze(1)  # (batch, 1, 2, L)
-        self._run_test(model, x, (4, 11))
+                self._run_test(model, self.common_input, (self.batch_size, cfg.n_classes))
 
 
 if __name__ == "__main__":

@@ -7,12 +7,6 @@ from layers.utils import Activation
 
 
 class Inception(nn.Module):
-    """
-    The Inception v2 block with 1D convolutions for time series classification.
-    Reference: InceptionTime: Finding AlexNet for Time Series Classification.
-    Paper: https://arxiv.org/abs/1909.04939
-    """
-
     def __init__(
         self,
         in_channels: int,
@@ -24,12 +18,6 @@ class Inception(nn.Module):
     ) -> None:
         """
         The Inception v2 block with 1D convolutions for time series classification.
-
-        :param in_channels: Number of input channels.
-        :param n_filters: Number of filters for each convolutional layer.
-        :param kernel_sizes: List or tuple of kernel sizes for the convolutional layers.
-        :param bottleneck_channels: Number of channels for the bottleneck layer.
-        :param activation: Activation function to use.
         """
         super(Inception, self).__init__()
 
@@ -307,27 +295,37 @@ class InceptionTime(nn.Module):
         return out
 
 
-class model(nn.Module):
+class Model(nn.Module):
     """
-    A wrapper class for InceptionTime model.
+    InceptionTime: Finding AlexNet for Time Series Classification <https://arxiv.org/abs/1909.04939>`_ backbone
+    Args:
+        in_channels (int): Number of input channels.
+        n_filters (int): Number of filters for each convolutional layer.
+        kernel_sizes (list(int)): List or tuple of kernel sizes for the convolutional layers.
+        bottleneck_channels (int): Number of channels for the bottleneck layer.
+        activation (str): Activation function to use.
     """
 
     def __init__(self, configs) -> None:
-        super(model, self).__init__()
+        super(Model, self).__init__()
+        
+        # 映射 main.py 参数到 InceptionTime 架构
         self.inception_time = InceptionTime(
-            seq_len=configs.seq_len,
-            in_channels=configs.input_channels,
-            n_filters=configs.n_filters,
-            kernel_sizes=configs.kernel_sizes,
-            bottleneck_channels=configs.bottleneck_channels,
+            seq_len=int(configs.seq_len),
+            in_channels=getattr(configs, "input_channels", 2), 
+            n_filters=configs.d_model,
+            n_blocks=configs.n_layers,
             n_classes=configs.n_classes,
-            n_blocks=configs.n_blocks,
-            activation=configs.activation,
-            bias=configs.bias,
-            use_global_avg_pool=configs.use_global_avg_pool,
-            max_pool_size=configs.max_pool_size,
-            use_residual=configs.use_residual,
+            activation="relu",
+
+            kernel_sizes=getattr(configs, "kernel_sizes", [3, 5, 11]),
+            bottleneck_channels=getattr(configs, "bottleneck_channels", 32),
+            bias=getattr(configs, "bias", False),
+            use_global_avg_pool=getattr(configs, "use_global_avg_pool", True),
+            max_pool_size=getattr(configs, "max_pool_size", 1),
+            use_residual=getattr(configs, "use_residual", True),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x shape: [Batch, 2, Seq_len]
         return self.inception_time(x)

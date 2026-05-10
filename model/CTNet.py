@@ -2,18 +2,14 @@ import torch
 from torch import nn
 
 
-class model(nn.Module):
+class Model(nn.Module):
     """`Connectionist Temporal Classification <https://www.cs.toronto.edu/~graves/icml_2006.pdf>`_
-    Strictly following the architecture: Bidirectional LSTM + CTC Linear Classifier.
-    Writing style aligned with MCformer (Configs-based, Sequential layers, explicit transposes).
-
     Args:
-        input_channels (int): Number of input channels (e.g., 2 for I/Q signals or 1 for audio).
         num_classes (int): Number of target labels (excluding blank).
     """
 
     def __init__(self, configs) -> None:
-        super(model, self).__init__()
+        super(Model, self).__init__()
 
         self.d_model = configs.d_model
         self.n_layers = configs.n_layers
@@ -22,7 +18,7 @@ class model(nn.Module):
 
         # 双向 LSTM
         self.backbone = nn.LSTM(
-            input_size=configs.input_channels,
+            input_size=2,
             hidden_size=self.d_model,
             num_layers=self.n_layers,
             batch_first=True,
