@@ -18,7 +18,7 @@ from torch.optim import Optimizer
 
 from sklearn.metrics import confusion_matrix
 
-from model import MCformer
+from model import MCformer, AMCNet, CDAT, CTNet, DenseCNN, DP_DRSN, EMC2Net, InceptionTime, MCLDNN, MTAMR, PETCGDNN, ModernTCN
 
 from utils.dataset import (
     RML2016aDataLoader,
@@ -88,6 +88,17 @@ class BaseExperiment(ABC):
         """Return a dictionary of available models."""
         return {
             "MCformer": MCformer,
+            "AMCNet": AMCNet,
+            "CDAT": CDAT,
+            "CTNet": CTNet,
+            "DenseCNN": DenseCNN,
+            "DP_DRSN": DP_DRSN,
+            "EMC2Net": EMC2Net,
+            "InceptionTime": InceptionTime,
+            "MCLDNN": MCLDNN,
+            "MTAMR": MTAMR,
+            "PETCGDNN": PETCGDNN,
+            "ModernTCN": ModernTCN,
             # Add other models here as needed
         }
 

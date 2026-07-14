@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 
 # 模型名称和训练数据集
 model=EMC2Net
@@ -10,7 +10,7 @@ dataset=RML2018a
 split_ratio=0.6
 
 # 遍历 SNR (信号比)
-for snr in {-20..18..2}
+for snr in {-20..30..2}
 do
   # 遍历 Batch Size
   for batch_size in 32 64 16 
@@ -26,7 +26,7 @@ do
         --model $model \
         --dataset $dataset \
         --snr $snr \
-        --file_path dataset/GOLD_XYZ_OSC.0001_1024.hdf5 \
+        --file_path /root/autodl-tmp/dataset/GOLD_XYZ_OSC.0001_1024.hdf5 \
         --batch_size $batch_size \
         --num_epochs 64 \
         --learning_rate $learning_rate \

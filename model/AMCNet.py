@@ -169,7 +169,7 @@ class Model(nn.Module):
         self.latent_dim = configs.d_ff
         self.n_classes = configs.n_classes
         self.num_heads = configs.n_heads
-        self.conv_chan_list = configs.conv_chan_list
+        self.conv_chan_list = getattr(configs, "conv_chan_list", None)
 
         if self.conv_chan_list is None:
             self.conv_chan_list = [36, 64, 128, 256]

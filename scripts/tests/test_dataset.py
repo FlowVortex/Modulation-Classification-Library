@@ -28,7 +28,7 @@ class TestDataset(unittest.TestCase):
 
         configs = DataSetConfigs(
             dataset="RML2016a",
-            file_path="./dataset/RML2016.10a_dict.pkl",
+            file_path="/root/autodl-tmp/dataset/RML2016.10a_dict.pkl",
             root_path=None,
         )
         train_loader, val_loader, test_loader = RML2016aDataLoader(configs).load()
@@ -59,7 +59,7 @@ class TestDataset(unittest.TestCase):
         """Test loading RML2016b"""
 
         configs = DataSetConfigs(
-            dataset="RML2016b", file_path="dataset/RML2016.10b.dat", root_path=None
+            dataset="RML2016b", file_path="/root/autodl-tmp/dataset/RML2016.10b.dat", root_path=None
         )
         train_loader, val_loader, test_loader = RML2016bDataLoader(configs).load()
 
@@ -90,7 +90,7 @@ class TestDataset(unittest.TestCase):
 
         configs = DataSetConfigs(
             dataset="RML2018a",
-            file_path="dataset/GOLD_XYZ_OSC.0001_1024.hdf5",
+            file_path="/root/autodl-tmp/dataset/GOLD_XYZ_OSC.0001_1024.hdf5",
             root_path=None,
         )
         train_loader, val_loader, test_loader = RML2018aDataLoader(configs).load()

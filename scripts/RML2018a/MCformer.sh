@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 
 # The model name and training dataset
 model=MCformer
@@ -7,7 +7,7 @@ dataset=RML2018a
 # The split ratio for the training dataset
 split_ratio=0.6
 
-for snr in {-20..18..2}
+for snr in {-20..30..2}
 do
   for batch_size in 32 64 16 
   do
@@ -19,7 +19,7 @@ do
         --model $model \
         --dataset $dataset \
         --snr $snr \
-        --file_path dataset/GOLD_XYZ_OSC.0001_1024.hdf5 \
+        --file_path /root/autodl-tmp/dataset/GOLD_XYZ_OSC.0001_1024.hdf5 \
         --batch_size $batch_size \
         --num_epochs 64 \
         --learning_rate $learning_rate \

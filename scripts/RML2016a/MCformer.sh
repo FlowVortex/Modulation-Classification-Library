@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 
 # The model name and training dataset
 model=MCformer
@@ -19,7 +19,7 @@ do
         --model $model \
         --dataset $dataset \
         --snr $snr \
-        --file_path dataset/RML2016.10a_dict.pkl \
+        --file_path /root/autodl-tmp/dataset/RML2016.10a_dict.pkl \
         --batch_size $batch_size \
         --num_epochs 64 \
         --learning_rate $learning_rate \
