@@ -18,7 +18,35 @@ from torch.optim import Optimizer
 
 from sklearn.metrics import confusion_matrix
 
-from model import MCformer, AMCNet, CDAT, CTNet, DenseCNN, DP_DRSN, EMC2Net, InceptionTime, MCLDNN, MTAMR, PETCGDNN, ModernTCN
+from transformers import PretrainedConfig
+
+from model import (
+    AMCNetConfig,
+    AMCNetModel,
+    CDATConfig,
+    CDATModel,
+    CTNetConfig,
+    CTNetModel,
+    DenseCNNConfig,
+    DenseCNNModel,
+    DP_DRSNConfig,
+    DP_DRSNModel,
+    EMC2NetConfig,
+    EMC2NetModel,
+    InceptionTimeConfig,
+    InceptionTimeModel,
+    MCformerConfig,
+    MCformerModel,
+    MCLDNNConfig,
+    MCLDNNModel,
+    MTAMRConfig,
+    MTAMRModel,
+    ModernTCNConfig,
+    ModernTCNModel,
+    PETCGDNNConfig,
+    PETCGDNNModel,
+    build_config_from_experiment,
+)
 
 from utils.dataset import (
     RML2016aDataLoader,
@@ -84,35 +112,44 @@ class BaseExperiment(ABC):
         raise NotImplementedError("Subclasses must implement this method.")
 
     @property
-    def model_dict(self) -> Dict[str, nn.Module]:
-        """Return a dictionary of available models."""
+    def model_dict(self) -> Dict[str, Tuple[type, type]]:
+        """Return a dictionary of available (Config, Model) pairs."""
         return {
-            "MCformer": MCformer,
-            "AMCNet": AMCNet,
-            "CDAT": CDAT,
-            "CTNet": CTNet,
-            "DenseCNN": DenseCNN,
-            "DP_DRSN": DP_DRSN,
-            "EMC2Net": EMC2Net,
-            "InceptionTime": InceptionTime,
-            "MCLDNN": MCLDNN,
-            "MTAMR": MTAMR,
-            "PETCGDNN": PETCGDNN,
-            "ModernTCN": ModernTCN,
-            # Add other models here as needed
+            "MCformer": (MCformerConfig, MCformerModel),
+            "AMCNet": (AMCNetConfig, AMCNetModel),
+            "CDAT": (CDATConfig, CDATModel),
+            "CTNet": (CTNetConfig, CTNetModel),
+            "DenseCNN": (DenseCNNConfig, DenseCNNModel),
+            "DP_DRSN": (DP_DRSNConfig, DP_DRSNModel),
+            "EMC2Net": (EMC2NetConfig, EMC2NetModel),
+            "InceptionTime": (InceptionTimeConfig, InceptionTimeModel),
+            "MCLDNN": (MCLDNNConfig, MCLDNNModel),
+            "MTAMR": (MTAMRConfig, MTAMRModel),
+            "PETCGDNN": (PETCGDNNConfig, PETCGDNNModel),
+            "ModernTCN": (ModernTCNConfig, ModernTCNModel),
         }
 
-    def build_model(self, name: str = "SpectrumTime") -> nn.Module:
-        """Build the model for training."""
-        # Check if the model name is valid
+    def build_model_config(self, name: str) -> PretrainedConfig:
+        """Build a model-specific ``PretrainedConfig`` from experiment configs.
+
+        Model defaults come from each ``xxxConfig`` (aligned with ``scripts/``).
+        Non-``None`` values from ``main.py`` / CLI args override those defaults.
+        """
+        assert name in self.model_dict, f"Model {name} is not supported."
+        config_cls, _ = self.model_dict[name]
+        return build_config_from_experiment(config_cls, self.configs)
+
+    def build_model(self, name: str = "AMCNet") -> nn.Module:
+        """Build the model for training via its ``xxxConfig``."""
         assert name in self.model_dict, f"Model {name} is not supported."
 
         self.accelerator.print(f"Building the model: {name}", end=" -> ")
 
-        # Create the model for experiment
-        model = self.model_dict[name].Model(self.configs)
-        self.accelerator.print(Fore.GREEN + "Done!" + Style.RESET_ALL)
+        _, model_cls = self.model_dict[name]
+        model_config = self.build_model_config(name)
+        model = model_cls(model_config)
 
+        self.accelerator.print(Fore.GREEN + "Done!" + Style.RESET_ALL)
         return model
 
     @abstractmethod

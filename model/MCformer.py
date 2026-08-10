@@ -1,99 +1,94 @@
+"""MCformer model for automatic modulation classification."""
+
+from __future__ import annotations
+
 import torch
 from torch import nn
+from transformers import PretrainedConfig
 
 
-class MCformer(nn.Module):
-    """`MCformer <https://ieeexplore.ieee.org/abstract/document/9685815>`_ backbone
-    The input for MCformer is a 1*2*L frame
-    Args:
-        frame_length (int): the frame length equal to number of sample points
-        n_classes (int): number of classes for classification.
-            The default value is -1, which uses the backbone as
-            a feature extractor without the top classifier.
+class MCformerConfig(PretrainedConfig):
+    """Configuration for :class:`MCformerModel`.
+
+    Defaults follow ``scripts/*/MCformer.sh``.
     """
+
+    model_type: str = "mcformer"
 
     def __init__(
         self,
-        configs,
+        seq_len: int = 128,
+        n_classes: int = 11,
+        d_model: int = 128,
+        d_ff: int = 256,
+        n_heads: int = 8,
+        n_layers: int = 3,
+        dropout: float = 0.1,
+        **kwargs,
     ) -> None:
-        super(MCformer, self).__init__()
+        super().__init__(**kwargs)
+        self.seq_len: int = seq_len
+        self.n_classes: int = n_classes
+        self.d_model: int = d_model
+        self.d_ff: int = d_ff
+        self.n_heads: int = n_heads
+        self.n_layers: int = n_layers
+        self.dropout: float = dropout
 
-        # 输入序列的长度 128 1024
-        self.seq_len = configs.seq_len
 
-        # 分类的类别数目
-        self.n_classes = configs.n_classes
+class MCformerModel(nn.Module):
+    """`MCformer <https://ieeexplore.ieee.org/abstract/document/9685815>`_ backbone.
 
-        # The demension of features model and feedforward in transformer
-        self.d_model = configs.d_model
-        self.d_ff = configs.d_ff
+    The input for MCformer is a 1*2*L frame ([Batch, 2, seq_len]).
+    """
 
-        # The number of heads in multi-head attention
-        self.n_heads = configs.n_heads
+    config_class = MCformerConfig
 
-        # The number of the transformer layers
-        self.n_layers = configs.n_layers
+    def __init__(self, config: MCformerConfig) -> None:
+        super().__init__()
+        self.config: MCformerConfig = config
+        self.seq_len: int = config.seq_len
+        self.n_classes: int = config.n_classes
+        self.d_model: int = config.d_model
+        self.d_ff: int = config.d_ff
+        self.n_heads: int = config.n_heads
+        self.n_layers: int = config.n_layers
+        self.dropout: float = config.dropout
 
-        # The rate of dropout layers
-        self.dropout = configs.dropout
-
-        # Create the CNN layer for embedding
-        self.embedding = nn.Sequential(
+        self.embedding: nn.Sequential = nn.Sequential(
             nn.Conv1d(
-                in_channels=2, out_channels=self.d_model, kernel_size=65, padding="same"
+                in_channels=2,
+                out_channels=self.d_model,
+                kernel_size=65,
+                padding="same",
             ),
             nn.ReLU(inplace=True),
         )
 
-        # Create one transformer encoder layer
-        encoder_layer = nn.TransformerEncoderLayer(
-            self.d_model, self.n_heads, dim_feedforward=self.d_ff, batch_first=True
+        encoder_layer: nn.TransformerEncoderLayer = nn.TransformerEncoderLayer(
+            self.d_model,
+            self.n_heads,
+            dim_feedforward=self.d_ff,
+            batch_first=True,
+            dropout=self.dropout,
+        )
+        self.backbone: nn.TransformerEncoder = nn.TransformerEncoder(
+            encoder_layer, num_layers=self.n_layers
         )
 
-        # Stack multiple layers to create the transformer encoder
-        self.backbone = nn.TransformerEncoder(encoder_layer, num_layers=self.n_layers)
-
-        # TODO: 后续可以统一去整合classifier部分
-        self.classifier = nn.Sequential(
+        self.classifier: nn.Sequential = nn.Sequential(
             nn.Linear(4 * self.d_model, self.d_ff),
             nn.ReLU(inplace=True),
             nn.Dropout(p=self.dropout),
             nn.Linear(self.d_ff, self.n_classes),
         )
 
-    def forward(self, x_enc: torch.FloatTensor) -> torch.FloatTensor:
-        # Get the embedding of data
+    def forward(self, x_enc: torch.Tensor) -> torch.Tensor:
         x_enc = self.embedding(x_enc)
         x_enc = torch.squeeze(x_enc, dim=2)
         x_enc = torch.transpose(x_enc, 1, 2)
 
-        # Pass through the transformer encoder layers
-        x_dec = self.backbone(x_enc)
-
-        # Get the outputs of the first 4 tokens
+        x_dec: torch.Tensor = self.backbone(x_enc)
         x_dec = x_dec[:, :4, :]
         x_dec = torch.reshape(x_dec, [-1, 4 * self.d_model])
-
-        # Classifier
         return self.classifier(x_dec)
-
-
-if __name__ == "__main__":
-
-    class Configs:
-        seq_len = 128
-        n_classes = 11
-        d_model = 64
-        d_ff = 256
-        n_heads = 8
-        n_layers = 4
-        dropout = 0.1
-
-    print("Building model...")
-    model = MCformer(configs=Configs())
-
-    inputs = torch.rand((4, 2, 128))
-    print("Input shape:", inputs.shape)
-    outputs = model(inputs)
-
-    print("Output shape:", outputs.shape)

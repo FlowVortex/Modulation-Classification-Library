@@ -26,6 +26,7 @@ parser.add_argument(
         "InceptionTime",
         "MCformer",
         "MCLDNN",
+        "ModernTCN",
         "MTAMR",
         "PETCGDNN",
     ],
@@ -76,43 +77,63 @@ parser.add_argument(
     help="The ratio to split the trainning and testing dataset.",
 )
 parser.add_argument(
-    "--patch_len", type=int, default=16, help="The length of each patch."
+    "--patch_len",
+    type=int,
+    default=None,
+    help="The length of each patch. Default comes from the model Config.",
 )
 parser.add_argument(
-    "--stride", type=int, default=8, help="The stride size when forming patches."
+    "--stride",
+    type=int,
+    default=None,
+    help="The stride size when forming patches. Default comes from the model Config.",
 )
 parser.add_argument(
     "--scale", type=bool, default=True, help="Whether to standard the training data."
 )
 parser.add_argument(
     "--seq_len",
-    type=float,
+    type=int,
     default=128,
     help="The length of each sequence of IQ inputs data.",
 )
 
-# The model hyper-parameters
+# The model hyper-parameters (default=None -> use each model's xxxConfig / scripts defaults)
 parser.add_argument(
     "--d_model",
     type=int,
-    default=64,
-    help="The dimension of model for Transformer block.",
+    default=None,
+    help="The dimension of model for Transformer block. Default comes from the model Config.",
 )
 parser.add_argument(
-    "--d_ff", type=int, default=256, help="The dimension of feedforward network."
+    "--d_ff",
+    type=int,
+    default=None,
+    help="The dimension of feedforward network. Default comes from the model Config.",
 )
-parser.add_argument("--n_heads", type=int, default=8, help="The number of heads.")
 parser.add_argument(
-    "--n_layers", type=int, default=2, help="The number of encoder layers."
+    "--n_heads",
+    type=int,
+    default=None,
+    help="The number of heads. Default comes from the model Config.",
 )
 parser.add_argument(
-    "--activation", type=str, default="gelu", help="The activation function."
+    "--n_layers",
+    type=int,
+    default=None,
+    help="The number of encoder layers. Default comes from the model Config.",
+)
+parser.add_argument(
+    "--activation",
+    type=str,
+    default=None,
+    help="The activation function. Default comes from the model Config.",
 )
 parser.add_argument(
     "--dropout",
     type=float,
-    default=0.1,
-    help="The dropout rate in deep learning models.",
+    default=None,
+    help="The dropout rate in deep learning models. Default comes from the model Config.",
 )
 
 # The optimizer, scheduler, and criterion hyper-parameters
@@ -296,7 +317,9 @@ if __name__ == "__main__":
     time_now = datetime.now().strftime(r"%Y-%m-%d-%H-%M-%S")
 
     # Create the experiment setting config
-    setting = f"{args.model}_{args.dataset}_{args.snr}_{args.mode}_sl{args.seq_len}_bs{args.batch_size}_lr{args.learning_rate}_dm{args.d_model}_df{args.d_ff}_pat{args.patience}_sd{args.seed}_{time_now}"
+    dm = args.d_model if args.d_model is not None else "cfg"
+    df = args.d_ff if args.d_ff is not None else "cfg"
+    setting = f"{args.model}_{args.dataset}_{args.snr}_{args.mode}_sl{args.seq_len}_bs{args.batch_size}_lr{args.learning_rate}_dm{dm}_df{df}_pat{args.patience}_sd{args.seed}_{time_now}"
 
     # Create and run the experiment
     exp = run_amc_experiment(

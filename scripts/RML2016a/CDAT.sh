@@ -17,7 +17,6 @@ do
   do
     # 遍历学习率
     for learning_rate in 0.0001 0.00005 0.000025 0.00001
-    # for learning_rate in 0.001 0.0005 0.0001
     do
       clear
       echo "model: $model, dataset: $dataset, SNR: $snr, batch_size: $batch_size, learning_rate: $learning_rate"

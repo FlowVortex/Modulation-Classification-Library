@@ -1,9 +1,55 @@
-from typing import List
+"""InceptionTime model for automatic modulation classification."""
+
+from __future__ import annotations
+
+from typing import List, Optional
 
 import torch
 from torch import nn
+from transformers import PretrainedConfig
 
 from layers.utils import Activation
+
+
+class InceptionTimeConfig(PretrainedConfig):
+    """Configuration for :class:`InceptionTimeModel`.
+
+    Defaults follow ``scripts/*/InceptionTime.sh``.
+    """
+
+    model_type: str = "inceptiontime"
+
+    def __init__(
+        self,
+        seq_len: int = 128,
+        n_classes: int = 11,
+        d_model: int = 32,
+        n_layers: int = 6,
+        activation: str = "relu",
+        input_channels: int = 2,
+        kernel_sizes: Optional[List[int]] = None,
+        bottleneck_channels: int = 32,
+        bias: bool = False,
+        use_global_avg_pool: bool = True,
+        max_pool_size: int = 1,
+        use_residual: bool = True,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.seq_len: int = seq_len
+        self.n_classes: int = n_classes
+        self.d_model: int = d_model
+        self.n_layers: int = n_layers
+        self.activation: str = activation
+        self.input_channels: int = input_channels
+        self.kernel_sizes: List[int] = (
+            kernel_sizes if kernel_sizes is not None else [3, 5, 11]
+        )
+        self.bottleneck_channels: int = bottleneck_channels
+        self.bias: bool = bias
+        self.use_global_avg_pool: bool = use_global_avg_pool
+        self.max_pool_size: int = max_pool_size
+        self.use_residual: bool = use_residual
 
 
 class Inception(nn.Module):
@@ -16,18 +62,12 @@ class Inception(nn.Module):
         activation: str = "relu",
         bias: bool = False,
     ) -> None:
-        """
-        The Inception v2 block with 1D convolutions for time series classification.
-        """
-        super(Inception, self).__init__()
-
-        # The number of convolutional kernels in the inception block
-        self.num_kernels = len(kernel_sizes)  # plus one for the max-pooling branch
+        """Inception v2 block with 1D convolutions for time series classification."""
+        super().__init__()
+        self.num_kernels: int = len(kernel_sizes)
 
         if in_channels > 1:
-            # If the number of input channels is greater than 1,
-            # use a bottleneck layer (1x1 convolution) for dimensionality reduction
-            self.bottleneck = nn.Conv1d(
+            self.bottleneck: nn.Module = nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=bottleneck_channels,
                 kernel_size=1,
@@ -35,12 +75,10 @@ class Inception(nn.Module):
                 bias=bias,
             )
         else:
-            # If there's only one input channel, skip the bottleneck layer
-            # and set bottleneck_channels to 1 for compatibility
             self.bottleneck = nn.Identity()
             bottleneck_channels = 1
 
-        inception_blocks = [
+        inception_blocks: List[nn.Module] = [
             self._make_conv(
                 in_channels=bottleneck_channels,
                 out_channels=n_filters,
@@ -63,12 +101,11 @@ class Inception(nn.Module):
                 ),
             )
         ]
-        self.inception_blocks = nn.ModuleList(inception_blocks)
-
-        self.batch_norm = nn.BatchNorm1d(
+        self.inception_blocks: nn.ModuleList = nn.ModuleList(inception_blocks)
+        self.batch_norm: nn.BatchNorm1d = nn.BatchNorm1d(
             num_features=(self.num_kernels + 1) * n_filters
         )
-        self.activation = Activation(activation=activation)
+        self.activation: Activation = Activation(activation=activation)
 
     @staticmethod
     def _make_conv(
@@ -79,18 +116,6 @@ class Inception(nn.Module):
         stride: int,
         bias: bool = False,
     ) -> nn.Conv1d:
-        """
-        The helper function to create a 1D convolutional layer.
-
-        :param in_channels: Number of input channels.
-        :param out_channels: Number of output channels.
-        :param kernel_size: Size of the convolutional kernel.
-        :param padding: Padding size.
-        :param stride: Stride size.
-        :param bias: Whether to include a bias term.
-
-        :return: (nn.Conv1d) A 1D convolutional layer.
-        """
         return nn.Conv1d(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -101,51 +126,28 @@ class Inception(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the Inception 1D module.
-        The output tensor has shape (batch_size, (num_kernels + 1) * n_filters, seq_len).
-        The num_kernels is the number of different kernel sizes used in the inception module.
-        Plus one for the max-pooling branch.
-
-        :param x: (torch.Tensor) Input tensor of shape (batch_size, in_channels, seq_len).
-
-        :return: (z_out) (torch.Tensor) Output tensor of shape (batch_size, (num_kernels + 1) * n_filters, seq_len).
-        """
-
-        z_bottleneck = self.bottleneck(x)
-
-        z_list = [conv(z_bottleneck) for conv in self.inception_blocks]
-        z = torch.cat(z_list, axis=1)
-
-        z_norm = self.batch_norm(z)
-        z_out = self.activation(z_norm)
-
-        return z_out
+        z_bottleneck: torch.Tensor = self.bottleneck(x)
+        z_list: List[torch.Tensor] = [
+            conv(z_bottleneck) for conv in self.inception_blocks
+        ]
+        z: torch.Tensor = torch.cat(z_list, axis=1)
+        z_norm: torch.Tensor = self.batch_norm(z)
+        return self.activation(z_norm)
 
 
 class InceptionFlatten(nn.Module):
-    """
-    The flattening layer for InceptionTime model.
-    """
+    """Flattening layer for InceptionTime."""
 
-    def __init__(self, out_features) -> None:
-        super(InceptionFlatten, self).__init__()
-        self.output_dim = out_features
+    def __init__(self, out_features: int) -> None:
+        super().__init__()
+        self.output_dim: int = out_features
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.view(-1, self.output_dim)
 
 
-class InceptionTime(nn.Module):
-    """
-    InceptionTime model for time series classification.
-    Reference: InceptionTime: Finding AlexNet for Time Series Classification.
-    Paper: https://arxiv.org/abs/1909.04939
-    Code: http://github.com/hfawaz/InceptionTime
-
-    This model is used as a strong baseline for time series classification tasks.
-    In this code we use the InceptionTime as the discriminator in GANs for time series data.
-    """
+class InceptionTimeBackbone(nn.Module):
+    """InceptionTime backbone for time series classification."""
 
     def __init__(
         self,
@@ -162,28 +164,10 @@ class InceptionTime(nn.Module):
         max_pool_size: int = 1,
         use_residual: bool = True,
     ) -> None:
-        """
-        InceptionTime model for time series classification.
+        super().__init__()
+        self.num_kernels: int = len(kernel_sizes)
 
-        :param seq_len: Length of the input time series.
-        :param in_channels: Number of input channels.
-        :param n_filters: Number of filters for each convolutional layer.
-        :param kernel_sizes: List or tuple of kernel sizes for the convolutional layers.
-        :param bottleneck_channels: Number of channels for the bottleneck layer.
-        :param n_classes: Number of output classes.
-        :param n_blocks: Number of Inception blocks to stack.
-        :param activation: Activation function name to use.
-        :param use_global_avg_pool: Whether to use global average pooling before the final classification layer.
-        :param max_pool_size: The output size of the global average pooling layer.
-        :param use_residual: Whether to use residual connections between Inception blocks.
-        """
-        super(InceptionTime, self).__init__()
-
-        # The number of convolutional kernels in each Inception block
-        self.num_kernels = len(kernel_sizes)  # plus one for the max-pooling branch
-
-        # Create the Inception blocks
-        self.inception_blocks = nn.ModuleList(
+        self.inception_blocks: nn.ModuleList = nn.ModuleList(
             [
                 Inception(
                     in_channels=(
@@ -199,10 +183,9 @@ class InceptionTime(nn.Module):
             ]
         )
 
-        # Whether to use residual connections
-        self.use_residual = use_residual
+        self.use_residual: bool = use_residual
         if self.use_residual:
-            self.residual_connections = nn.ModuleList(
+            self.residual_connections: Optional[nn.ModuleList] = nn.ModuleList(
                 [
                     nn.Sequential(
                         nn.Conv1d(
@@ -221,111 +204,80 @@ class InceptionTime(nn.Module):
                     for i in range(n_blocks)
                 ]
             )
-            self.residual_activations = nn.ModuleList(
+            self.residual_activations: Optional[nn.ModuleList] = nn.ModuleList(
                 [Activation(activation=activation) for _ in range(n_blocks)]
             )
-
         else:
-            # If not using residual connections, set to None
             self.residual_connections = None
             self.residual_activations = None
 
-        # Whether to use global average pooling before the final classification layer
-        self.use_global_avg_pool = use_global_avg_pool
-
+        self.use_global_avg_pool: bool = use_global_avg_pool
         if use_global_avg_pool:
-            # Create the global average pooling layer
-            self.global_avg_pool = nn.AdaptiveAvgPool1d(output_size=max_pool_size)
-
-            # Create the flattening layer
-            self.flatten = InceptionFlatten(
+            self.global_avg_pool: nn.AdaptiveAvgPool1d = nn.AdaptiveAvgPool1d(
+                output_size=max_pool_size
+            )
+            self.flatten: InceptionFlatten = InceptionFlatten(
                 out_features=(self.num_kernels + 1) * n_filters
             )
-
-            # Create the final classification layer
-            self.classifier = nn.Linear(
+            self.classifier: nn.Linear = nn.Linear(
                 in_features=(self.num_kernels + 1) * n_filters, out_features=n_classes
             )
         else:
-            # If not using global average pooling, flatten the output of the last Inception block
             self.classifier = nn.Linear(
                 in_features=(self.num_kernels + 1) * n_filters * seq_len,
                 out_features=n_classes,
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the InceptionTime model.
-
-        :param x: (torch.Tensor) Input tensor of shape (batch_size, in_channels, seq_len).
-
-        :return: (torch.Tensor) Output tensor of shape (batch_size, n_classes).
-        """
-        # (batch_size, in_channels, seq_len)
-        out = x
+        out: torch.Tensor = x
 
         if self.use_residual:
-            # Apply each inception block with its corresponding residual connection and activation
             for inception, res_layer, activation in zip(
                 self.inception_blocks,
                 self.residual_connections,
                 self.residual_activations,
             ):
-                z = inception(out)
-                res = res_layer(out)
-                z = z + res
-                out = activation(z)
-
+                z: torch.Tensor = inception(out)
+                res: torch.Tensor = res_layer(out)
+                out = activation(z + res)
         else:
-            # Apply each inception block sequentially without residual connections
             for inception in self.inception_blocks:
                 out = inception(out)
 
         if self.use_global_avg_pool:
-            # Apply global average pooling and flatten the output
             out = self.global_avg_pool(out)
             out = self.flatten(out)
         else:
-            # Flatten the output without global average pooling
-            out = out.view(out.size(0), -1)  # Flatten without global average pooling
+            out = out.view(out.size(0), -1)
 
-        out = self.classifier(out)
-
-        # Final output shape: (batch_size, n_classes)
-        return out
+        return self.classifier(out)
 
 
-class Model(nn.Module):
-    """
-    InceptionTime: Finding AlexNet for Time Series Classification <https://arxiv.org/abs/1909.04939>`_ backbone
-    Args:
-        in_channels (int): Number of input channels.
-        n_filters (int): Number of filters for each convolutional layer.
-        kernel_sizes (list(int)): List or tuple of kernel sizes for the convolutional layers.
-        bottleneck_channels (int): Number of channels for the bottleneck layer.
-        activation (str): Activation function to use.
+class InceptionTimeModel(nn.Module):
+    """InceptionTime: Finding AlexNet for Time Series Classification.
+
+    Paper: https://arxiv.org/abs/1909.04939
     """
 
-    def __init__(self, configs) -> None:
-        super(Model, self).__init__()
-        
-        # 映射 main.py 参数到 InceptionTime 架构
-        self.inception_time = InceptionTime(
-            seq_len=int(configs.seq_len),
-            in_channels=getattr(configs, "input_channels", 2), 
-            n_filters=configs.d_model,
-            n_blocks=configs.n_layers,
-            n_classes=configs.n_classes,
-            activation="relu",
+    config_class = InceptionTimeConfig
 
-            kernel_sizes=getattr(configs, "kernel_sizes", [3, 5, 11]),
-            bottleneck_channels=getattr(configs, "bottleneck_channels", 32),
-            bias=getattr(configs, "bias", False),
-            use_global_avg_pool=getattr(configs, "use_global_avg_pool", True),
-            max_pool_size=getattr(configs, "max_pool_size", 1),
-            use_residual=getattr(configs, "use_residual", True),
+    def __init__(self, config: InceptionTimeConfig) -> None:
+        super().__init__()
+        self.config: InceptionTimeConfig = config
+        self.inception_time: InceptionTimeBackbone = InceptionTimeBackbone(
+            seq_len=int(config.seq_len),
+            in_channels=config.input_channels,
+            n_filters=config.d_model,
+            n_blocks=config.n_layers,
+            n_classes=config.n_classes,
+            activation=config.activation,
+            kernel_sizes=list(config.kernel_sizes),
+            bottleneck_channels=config.bottleneck_channels,
+            bias=config.bias,
+            use_global_avg_pool=config.use_global_avg_pool,
+            max_pool_size=config.max_pool_size,
+            use_residual=config.use_residual,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: [Batch, 2, Seq_len]
         return self.inception_time(x)

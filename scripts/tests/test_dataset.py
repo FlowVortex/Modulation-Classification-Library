@@ -59,7 +59,9 @@ class TestDataset(unittest.TestCase):
         """Test loading RML2016b"""
 
         configs = DataSetConfigs(
-            dataset="RML2016b", file_path="/root/autodl-tmp/dataset/RML2016.10b.dat", root_path=None
+            dataset="RML2016b",
+            file_path="/root/autodl-tmp/dataset/RML2016.10b.dat",
+            root_path=None,
         )
         train_loader, val_loader, test_loader = RML2016bDataLoader(configs).load()
 
