@@ -11,6 +11,7 @@ from model.MCformer import MCformerConfig, MCformerModel
 from model.MCLDNN import MCLDNNConfig, MCLDNNModel
 from model.ModernTCN import ModernTCNConfig, ModernTCNModel
 from model.MTAMR import MTAMRConfig, MTAMRModel
+from model.NMformer import NMformerConfig, NMformerModel
 from model.PETCGDNN import PETCGDNNConfig, PETCGDNNModel
 from model.base import build_config_from_experiment
 
@@ -38,6 +39,8 @@ __all__ = [
     "ModernTCNModel",
     "MTAMRConfig",
     "MTAMRModel",
+    "NMformerConfig",
+    "NMformerModel",
     "PETCGDNNConfig",
     "PETCGDNNModel",
 ]

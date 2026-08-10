@@ -32,6 +32,8 @@ from model import (
     MTAMRModel,
     ModernTCNConfig,
     ModernTCNModel,
+    NMformerConfig,
+    NMformerModel,
     PETCGDNNConfig,
     PETCGDNNModel,
 )
@@ -67,6 +69,20 @@ class TestModels(unittest.TestCase):
             (PETCGDNNConfig, PETCGDNNModel, {}),
             (ModernTCNConfig, ModernTCNModel, {}),
             (DenseCNNConfig, DenseCNNModel, {"d_model": 64, "growth_rate": 12}),
+            # Lightweight NMformer for unit tests (full ViT-B/16 is heavy on CPU)
+            (
+                NMformerConfig,
+                NMformerModel,
+                {
+                    "img_size": 32,
+                    "patch_size": 8,
+                    "d_model": 64,
+                    "d_ff": 128,
+                    "n_heads": 4,
+                    "n_layers": 2,
+                    "pretrained": False,
+                },
+            ),
         ]
 
         for config_cls, model_cls, overrides in test_cases:

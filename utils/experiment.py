@@ -43,6 +43,8 @@ from model import (
     MTAMRModel,
     ModernTCNConfig,
     ModernTCNModel,
+    NMformerConfig,
+    NMformerModel,
     PETCGDNNConfig,
     PETCGDNNModel,
     build_config_from_experiment,
@@ -125,6 +127,7 @@ class BaseExperiment(ABC):
             "InceptionTime": (InceptionTimeConfig, InceptionTimeModel),
             "MCLDNN": (MCLDNNConfig, MCLDNNModel),
             "MTAMR": (MTAMRConfig, MTAMRModel),
+            "NMformer": (NMformerConfig, NMformerModel),
             "PETCGDNN": (PETCGDNNConfig, PETCGDNNModel),
             "ModernTCN": (ModernTCNConfig, ModernTCNModel),
         }

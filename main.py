@@ -28,6 +28,7 @@ parser.add_argument(
         "MCLDNN",
         "ModernTCN",
         "MTAMR",
+        "NMformer",
         "PETCGDNN",
     ],
     help="The model to be trained for Auto Modulation Classification",
