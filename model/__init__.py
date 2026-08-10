@@ -6,6 +6,7 @@ from model.CTNet import CTNetConfig, CTNetModel
 from model.DenseCNN import DenseCNNConfig, DenseCNNModel
 from model.DP_DRSN import DP_DRSNConfig, DP_DRSNModel
 from model.EMC2Net import EMC2NetConfig, EMC2NetModel
+from model.IOformer import IOformerConfig, IOformerModel
 from model.InceptionTime import InceptionTimeConfig, InceptionTimeModel
 from model.MCformer import MCformerConfig, MCformerModel
 from model.MCLDNN import MCLDNNConfig, MCLDNNModel
@@ -13,6 +14,8 @@ from model.ModernTCN import ModernTCNConfig, ModernTCNModel
 from model.MTAMR import MTAMRConfig, MTAMRModel
 from model.NMformer import NMformerConfig, NMformerModel
 from model.PETCGDNN import PETCGDNNConfig, PETCGDNNModel
+from model.RadioLLM import RadioLLMConfig, RadioLLMModel
+from model.SpectrumFM import SpectrumFMConfig, SpectrumFMModel
 from model.base import build_config_from_experiment
 
 __all__ = [
@@ -29,6 +32,8 @@ __all__ = [
     "DP_DRSNModel",
     "EMC2NetConfig",
     "EMC2NetModel",
+    "IOformerConfig",
+    "IOformerModel",
     "InceptionTimeConfig",
     "InceptionTimeModel",
     "MCformerConfig",
@@ -43,4 +48,8 @@ __all__ = [
     "NMformerModel",
     "PETCGDNNConfig",
     "PETCGDNNModel",
+    "RadioLLMConfig",
+    "RadioLLMModel",
+    "SpectrumFMConfig",
+    "SpectrumFMModel",
 ]

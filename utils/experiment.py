@@ -33,6 +33,8 @@ from model import (
     DP_DRSNModel,
     EMC2NetConfig,
     EMC2NetModel,
+    IOformerConfig,
+    IOformerModel,
     InceptionTimeConfig,
     InceptionTimeModel,
     MCformerConfig,
@@ -47,6 +49,10 @@ from model import (
     NMformerModel,
     PETCGDNNConfig,
     PETCGDNNModel,
+    RadioLLMConfig,
+    RadioLLMModel,
+    SpectrumFMConfig,
+    SpectrumFMModel,
     build_config_from_experiment,
 )
 
@@ -124,12 +130,15 @@ class BaseExperiment(ABC):
             "DenseCNN": (DenseCNNConfig, DenseCNNModel),
             "DP_DRSN": (DP_DRSNConfig, DP_DRSNModel),
             "EMC2Net": (EMC2NetConfig, EMC2NetModel),
+            "IOformer": (IOformerConfig, IOformerModel),
             "InceptionTime": (InceptionTimeConfig, InceptionTimeModel),
             "MCLDNN": (MCLDNNConfig, MCLDNNModel),
             "MTAMR": (MTAMRConfig, MTAMRModel),
             "NMformer": (NMformerConfig, NMformerModel),
             "PETCGDNN": (PETCGDNNConfig, PETCGDNNModel),
             "ModernTCN": (ModernTCNConfig, ModernTCNModel),
+            "RadioLLM": (RadioLLMConfig, RadioLLMModel),
+            "SpectrumFM": (SpectrumFMConfig, SpectrumFMModel),
         }
 
     def build_model_config(self, name: str) -> PretrainedConfig:

@@ -23,6 +23,7 @@ parser.add_argument(
         "DenseCNN",
         "DP_DRSN",
         "EMC2Net",
+        "IOformer",
         "InceptionTime",
         "MCformer",
         "MCLDNN",
@@ -30,6 +31,8 @@ parser.add_argument(
         "MTAMR",
         "NMformer",
         "PETCGDNN",
+        "RadioLLM",
+        "SpectrumFM",
     ],
     help="The model to be trained for Auto Modulation Classification",
 )

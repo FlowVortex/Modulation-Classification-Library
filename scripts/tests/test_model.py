@@ -22,6 +22,8 @@ from model import (
     DP_DRSNModel,
     EMC2NetConfig,
     EMC2NetModel,
+    IOformerConfig,
+    IOformerModel,
     InceptionTimeConfig,
     InceptionTimeModel,
     MCformerConfig,
@@ -36,6 +38,10 @@ from model import (
     NMformerModel,
     PETCGDNNConfig,
     PETCGDNNModel,
+    RadioLLMConfig,
+    RadioLLMModel,
+    SpectrumFMConfig,
+    SpectrumFMModel,
 )
 
 
@@ -62,6 +68,7 @@ class TestModels(unittest.TestCase):
             (CTNetConfig, CTNetModel, {"d_model": 64}),
             (DP_DRSNConfig, DP_DRSNModel, {}),
             (EMC2NetConfig, EMC2NetModel, {}),
+            (IOformerConfig, IOformerModel, {}),
             (InceptionTimeConfig, InceptionTimeModel, {"d_model": 32}),
             (MCformerConfig, MCformerModel, {"d_model": 64, "n_heads": 8}),
             (MCLDNNConfig, MCLDNNModel, {}),
@@ -81,6 +88,32 @@ class TestModels(unittest.TestCase):
                     "n_heads": 4,
                     "n_layers": 2,
                     "pretrained": False,
+                },
+            ),
+            (
+                RadioLLMConfig,
+                RadioLLMModel,
+                {
+                    "d_model": 64,
+                    "d_ff": 32,
+                    "n_heads": 4,
+                    "llm_layers": 2,
+                    "pretrained": False,
+                    "use_prompt": False,
+                    "is_LORA": False,
+                },
+            ),
+            # Lightweight SpectrumFM for unit tests (full L=16 Conformer is heavy)
+            (
+                SpectrumFMConfig,
+                SpectrumFMModel,
+                {
+                    "d_model": 64,
+                    "d_ff": 128,
+                    "n_heads": 4,
+                    "n_layers": 2,
+                    "max_len": 128,
+                    "is_LORA": False,
                 },
             ),
         ]
