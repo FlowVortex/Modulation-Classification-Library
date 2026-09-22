@@ -301,6 +301,12 @@ parser.add_argument('--enc_in', type=int, default=2, help='input channels (e.g.,
 parser.add_argument('--n_classes_amc', type=int, default=11)
 parser.add_argument('--n_classes_wtc', type=int, default=3)
 parser.add_argument('--n_classes_ss', type=int, default=2)
+parser.add_argument(
+    "--data_ratio",
+    type=float,
+    default=1.0,
+    help="Fraction of the dataset to use (subsample), e.g. 0.1 uses 10%%.",
+)
 
 
 if __name__ == "__main__":
