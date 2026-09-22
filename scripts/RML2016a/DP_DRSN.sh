@@ -4,15 +4,15 @@
 export CUDA_VISIBLE_DEVICES=0
 
 # 基础配置
-model="MCLDNN"
-dataset="RML2018a"
-file_path="/root/autodl-tmp/dataset/GOLD_XYZ_OSC.0001_1024.hdf5"
+model="DP_DRSN"
+dataset="RML2016a"
+file_path="/root/autodl-tmp/dataset/RML2016.10a_dict.pkl"
 
 # SNR 列表：训练时合并所有 SNR，测试时逐 SNR 单独评估
-snr_list=($(seq -20 2 30))
+snr_list=($(seq -20 2 18))
 
 # 任务列表：AMC(调制识别), WTC(技术识别), SS(频谱感知)
-tasks=("SS")
+tasks=("AMC" "WTC" "SS")
 
 # 1. 遍历任务
 for task in "${tasks[@]}"

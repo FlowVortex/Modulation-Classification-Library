@@ -3,8 +3,7 @@ echo "批量执行 scripts/RML2016a 和 scripts/AD 目录下所有sh脚本"
 
 # 定义需要遍历的目录列表
 dirs=(
-    "scripts/RML2016a",
-    "scripts/RML2016b",
+    "scripts/RML2018a"
 )
 
 # 循环每个目标目录
@@ -29,9 +28,5 @@ for dir in "${dirs[@]}"; do
         fi
     done
 done
-
-bash scripts/RML2018a/CTNet.sh
-bash scripts/RML2018a/PETCGDNN.sh
-bash scripts/RML2018a/ModernTCN.sh
 
 echo -e "\n所有sh脚本运行结束"

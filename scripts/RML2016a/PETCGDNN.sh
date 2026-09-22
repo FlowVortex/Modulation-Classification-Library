@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # 指定 GPU
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # 基础配置
 model="PETCGDNN"
 dataset="RML2016a"
-root_path="/data/wrz/rml"
+file_path="/root/autodl-tmp/dataset/RML2016.10a_dict.pkl"
 
 # SNR 列表：训练时合并所有 SNR，测试时逐 SNR 单独评估
 snr_list=($(seq -20 2 18))
@@ -35,7 +35,7 @@ do
     --model "$model" \
     --dataset "$dataset" \
     --snr_list ${snr_list[@]} \
-    --root_path "$root_path" \
+    --file_path "$file_path" \
     --mode "supervised" \
     --batch_size "$batch_size" \
     --num_epochs "$epochs" \
