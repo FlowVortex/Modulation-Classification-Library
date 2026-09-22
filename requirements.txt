@@ -1,5 +1,6 @@
 accelerate==1.11.0
 colorama==0.4.6
+datasets>=2.14
 einops==0.7.*
 h5py==3.15.1
 matplotlib==3.10.8

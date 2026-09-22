@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # 指定 GPU
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 # 基础配置
 model="MCLDNN"
 dataset="RML2018a"
-file_path="/root/autodl-tmp/dataset/GOLD_XYZ_OSC.0001_1024.hdf5"
+root_path="/data/wrz/rml"
 
 # SNR 列表：训练时合并所有 SNR，测试时逐 SNR 单独评估
 snr_list=($(seq -20 2 30))
@@ -35,7 +35,7 @@ do
     --model "$model" \
     --dataset "$dataset" \
     --snr_list ${snr_list[@]} \
-    --file_path "$file_path" \
+    --root_path "$root_path" \
     --mode "supervised" \
     --batch_size "$batch_size" \
     --num_epochs "$epochs" \
@@ -47,7 +47,7 @@ do
     --warmup LinearLR \
     --warmup_epochs 0 \
     --split_ratio 0.6 \
-    --seq_len 128 \
+    --seq_len 1024 \
     --seed 42 \
     --dropout 0.1 \
     --d_model 64 \
