@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-import pickle, h5py
+import pickle, h5py, gc
 
 class ModulationFineTuningDataset(Dataset):
     def __init__(
@@ -47,6 +47,7 @@ class BaseDataLoader(object):
         self.val_batch_size = 128
         self.val_test_split_ratio = 0.4      # 验证+测试共 40%，各 20%
         self.task_name = getattr(configs, 'task_name', 'AMC')
+        self.data_ratio = getattr(configs, 'data_ratio', 1.0)
 
         # 用于存储按 SNR 分离的测试数据，供测试时单独评估
         self._snr_test_data: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
@@ -88,6 +89,7 @@ class BaseDataLoader(object):
         return train_loader, val_loader, test_loader
 
     def normalize(self, X_train, X_val, X_test):
+        # 使用 float32 避免 StandardScaler 内部 float64 转换造成 2× 内存膨胀
         self.scaler = StandardScaler()
         ns, nc, sl = X_train.shape
         X_train_flat = X_train.reshape(ns, -1)
@@ -97,7 +99,7 @@ class BaseDataLoader(object):
             _ns, _nc, _sl = X.shape
             X_flat = X.reshape(_ns, -1)
             X_scaled = self.scaler.transform(X_flat)
-            return X_scaled.reshape(_ns, _nc, _sl)
+            return X_scaled.astype(np.float32).reshape(_ns, _nc, _sl)
 
         return transform(X_train), transform(X_val), transform(X_test)
 
@@ -107,7 +109,7 @@ class BaseDataLoader(object):
         for snr, (X_te, y_te) in self._snr_test_data.items():
             ns, nc, sl = X_te.shape
             X_flat = X_te.reshape(ns, -1)
-            X_scaled = self.scaler.transform(X_flat)
+            X_scaled = self.scaler.transform(X_flat).astype(np.float32)
             X_te_norm = X_scaled.reshape(ns, nc, sl)
 
             ds = ModulationFineTuningDataset(
@@ -171,28 +173,33 @@ class RML2016aDataLoader(BaseDataLoader):
                     self._snr_test_data[snr] = (np.vstack(_snr_X_te[snr]), np.hstack(_snr_y_te[snr]).astype(int))
 
         elif self.task_name == 'SS':
-            # 先收集所有SNR下的非噪声信号，再统一生成噪声、划分
-            X_signals_all = []
+            # 逐 SNR 生成信号+噪声，分别划分，保留逐 SNR 测试数据
+            _snr_X_te, _snr_y_te = {}, {}
             for snr in self.snr_list:
+                X_signals_snr = []
                 for mod in all_mods:
                     if 'noise' not in mod.lower():
-                        X_signals_all.append(data_dict[(mod, snr)])
-            X_signals = np.vstack(X_signals_all)
-            # 生成匹配信号 RMS 功率的纯噪声（避免模型靠功率差异作弊）
-            signal_rms = np.sqrt(np.mean(X_signals ** 2))
-            X_noise = self.generate_noise_data(X_signals.shape, std=signal_rms)
-            y_signals = np.ones(len(X_signals))
-            y_noise = np.zeros(len(X_noise))
+                        X_signals_snr.append(data_dict[(mod, snr)])
+                X_signals = np.vstack(X_signals_snr)
+                # 按当前 SNR 的信号 RMS 功率生成匹配噪声（避免模型靠功率差异作弊）
+                signal_rms = np.sqrt(np.mean(X_signals ** 2))
+                X_noise = self.generate_noise_data(X_signals.shape, std=signal_rms)
+                y_signals = np.ones(len(X_signals))
+                y_noise = np.zeros(len(X_noise))
 
-            X_all = np.vstack([X_signals, X_noise])
-            y_all = np.hstack([y_signals, y_noise])
-            X_train, X_tmp, y_train, y_tmp = train_test_split(X_all, y_all, test_size=self.val_test_split_ratio, stratify=y_all)
-            X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
+                X_all = np.vstack([X_signals, X_noise])
+                y_all = np.hstack([y_signals, y_noise])
+                X_train, X_tmp, y_train, y_tmp = train_test_split(X_all, y_all, test_size=self.val_test_split_ratio, stratify=y_all)
+                X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
 
-            # 跳过累积循环，直接赋值
-            X_tr_all.append(X_train); y_tr_all.append(y_train)
-            X_va_all.append(X_val); y_va_all.append(y_val)
-            X_te_all.append(X_test); y_te_all.append(y_test)
+                X_tr_all.append(X_train); y_tr_all.append(y_train)
+                X_va_all.append(X_val); y_va_all.append(y_val)
+                X_te_all.append(X_test); y_te_all.append(y_test)
+                _snr_X_te[snr] = [X_test]; _snr_y_te[snr] = [y_test]
+
+            for snr in self.snr_list:
+                if snr in _snr_X_te and _snr_X_te[snr]:
+                    self._snr_test_data[snr] = (np.vstack(_snr_X_te[snr]), np.hstack(_snr_y_te[snr]).astype(int))
 
         else:  # AMC / WTC
             _snr_X_te, _snr_y_te = {}, {}
@@ -276,25 +283,32 @@ class RML2016bDataLoader(BaseDataLoader):
                     self._snr_test_data[snr] = (np.vstack(_snr_X_te[snr]), np.hstack(_snr_y_te[snr]).astype(int))
 
         elif self.task_name == 'SS':
-            X_signals_all = []
+            # 逐 SNR 生成信号+噪声，分别划分，保留逐 SNR 测试数据
+            _snr_X_te, _snr_y_te = {}, {}
             for snr in self.snr_list:
+                X_signals_snr = []
                 for mod in all_mods:
                     if 'noise' not in mod.lower():
-                        X_signals_all.append(data_dict[(mod, snr)])
-            X_signals = np.vstack(X_signals_all)
-            # 生成匹配信号 RMS 功率的纯噪声（避免模型靠功率差异作弊）
-            signal_rms = np.sqrt(np.mean(X_signals ** 2))
-            X_noise = self.generate_noise_data(X_signals.shape, std=signal_rms)
-            y_signals = np.ones(len(X_signals))
-            y_noise = np.zeros(len(X_noise))
+                        X_signals_snr.append(data_dict[(mod, snr)])
+                X_signals = np.vstack(X_signals_snr)
+                # 按当前 SNR 的信号 RMS 功率生成匹配噪声（避免模型靠功率差异作弊）
+                signal_rms = np.sqrt(np.mean(X_signals ** 2))
+                X_noise = self.generate_noise_data(X_signals.shape, std=signal_rms)
+                y_signals = np.ones(len(X_signals))
+                y_noise = np.zeros(len(X_noise))
 
-            X_all = np.vstack([X_signals, X_noise])
-            y_all = np.hstack([y_signals, y_noise])
-            X_train, X_tmp, y_train, y_tmp = train_test_split(X_all, y_all, test_size=self.val_test_split_ratio, stratify=y_all)
-            X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
-            X_tr_all.append(X_train); y_tr_all.append(y_train)
-            X_va_all.append(X_val); y_va_all.append(y_val)
-            X_te_all.append(X_test); y_te_all.append(y_test)
+                X_all = np.vstack([X_signals, X_noise])
+                y_all = np.hstack([y_signals, y_noise])
+                X_train, X_tmp, y_train, y_tmp = train_test_split(X_all, y_all, test_size=self.val_test_split_ratio, stratify=y_all)
+                X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
+                X_tr_all.append(X_train); y_tr_all.append(y_train)
+                X_va_all.append(X_val); y_va_all.append(y_val)
+                X_te_all.append(X_test); y_te_all.append(y_test)
+                _snr_X_te[snr] = [X_test]; _snr_y_te[snr] = [y_test]
+
+            for snr in self.snr_list:
+                if snr in _snr_X_te and _snr_X_te[snr]:
+                    self._snr_test_data[snr] = (np.vstack(_snr_X_te[snr]), np.hstack(_snr_y_te[snr]).astype(int))
 
         else:
             _snr_X_te, _snr_y_te = {}, {}
@@ -358,104 +372,162 @@ class RML2018aDataLoader(BaseDataLoader):
         X_all_raw = data["X"]
         y_all_raw = np.argmax(data["Y"], axis=1)
         z_all = np.array(data["Z"]).flatten()
+        rng = np.random.RandomState(self.configs.seed)
+        sl = X_all_raw.shape[1]   # 时间步 (1024)
+        nc = X_all_raw.shape[2]   # 通道数 (I/Q = 2)
 
-        X_tr_all, y_tr_all = [], []
-        X_va_all, y_va_all = [], []
-        X_te_all, y_te_all = [], []
+        # ============================================================
+        # Phase 1: 只确定划分索引和样本数，不保留数据数组
+        # ============================================================
+        tr_indices, va_indices = [], []   # [(X_chunk, y_chunk), ...]
+        snr_te_indices = {}  # snr -> (X_list, y_list)
 
         if self.task_name == 'AD':
-            # 查找噪声类标签
             noise_label = None
             for lbl, name in enumerate(self.class_list):
                 if 'noise' in name.lower():
-                    noise_label = lbl
-                    break
+                    noise_label = lbl; break
             if noise_label is None:
                 raise ValueError("AD任务需要数据集中包含 'noise' 类别，但在 RML2018a 中未找到。")
 
-            _snr_X_te, _snr_y_te = {}, {}
             for snr in self.snr_list:
                 idx_snr = np.where(z_all == snr)[0]
-                if len(idx_snr) == 0:
-                    continue
-                _snr_X_te[snr], _snr_y_te[snr] = [], []
+                if len(idx_snr) == 0: continue
                 X_snr = np.transpose(X_all_raw[idx_snr], (0, 2, 1))
                 y_snr = y_all_raw[idx_snr]
-                unique_mods = np.unique(y_snr)
-                for lbl in unique_mods:
+                snr_te_indices[snr] = ([], [])
+                for lbl in np.unique(y_snr):
                     idx_mod = np.where(y_snr == lbl)[0]
-                    X_mod = X_snr[idx_mod]
-                    y_mod = np.ones(len(idx_mod)) if lbl == noise_label else np.zeros(len(idx_mod))
-                    X_tr, X_tmp, y_tr, y_tmp = train_test_split(X_mod, y_mod, test_size=self.val_test_split_ratio, stratify=y_mod)
-                    X_va, X_te, y_va, y_te = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
-                    X_tr_all.append(X_tr); y_tr_all.append(y_tr)
-                    X_va_all.append(X_va); y_va_all.append(y_va)
-                    X_te_all.append(X_te); y_te_all.append(y_te)
-                    _snr_X_te[snr].append(X_te); _snr_y_te[snr].append(y_te)
-            for snr in self.snr_list:
-                if snr in _snr_X_te and _snr_X_te[snr]:
-                    self._snr_test_data[snr] = (np.vstack(_snr_X_te[snr]), np.hstack(_snr_y_te[snr]).astype(int))
+                    # 按 data_ratio 随机取子集
+                    if self.data_ratio < 1.0:
+                        n_sub = max(1, int(len(idx_mod) * self.data_ratio))
+                        idx_mod = idx_mod[rng.choice(len(idx_mod), n_sub, replace=False)]
+                    y_mod = np.ones(len(idx_mod), dtype=np.int32) if lbl == noise_label else np.zeros(len(idx_mod), dtype=np.int32)
+                    indices = np.arange(len(idx_mod))
+                    tr_idx, tmp_idx = train_test_split(indices, test_size=self.val_test_split_ratio, stratify=y_mod, random_state=rng)
+                    va_idx, te_idx = train_test_split(tmp_idx, test_size=0.5, stratify=y_mod[tmp_idx], random_state=rng)
+                    if len(tr_idx) > 0: tr_indices.append((X_snr[idx_mod[tr_idx]], y_mod[tr_idx]))
+                    if len(va_idx) > 0: va_indices.append((X_snr[idx_mod[va_idx]], y_mod[va_idx]))
+                    snr_te_indices[snr][0].append(X_snr[idx_mod[te_idx]])
+                    snr_te_indices[snr][1].append(y_mod[te_idx])
+                del X_snr, y_snr
 
         elif self.task_name == 'SS':
-            X_signals_all = []
             for snr in self.snr_list:
                 idx_snr = np.where(z_all == snr)[0]
-                if len(idx_snr) == 0:
-                    continue
+                if len(idx_snr) == 0: continue
                 X_snr = np.transpose(X_all_raw[idx_snr], (0, 2, 1))
                 y_snr = y_all_raw[idx_snr]
+                X_signals_list = []
                 for lbl in np.unique(y_snr):
-                    if 'noise' in self.class_list[lbl].lower():
-                        continue
-                    X_signals_all.append(X_snr[y_snr == lbl])
-            if not X_signals_all:
-                raise RuntimeError("未找到任何非噪声信号，请检查 SNR 设置或数据集。")
-            X_signals = np.vstack(X_signals_all)
-            # 生成匹配信号 RMS 功率的纯噪声（避免模型靠功率差异作弊）
-            signal_rms = np.sqrt(np.mean(X_signals ** 2))
-            X_noise = self.generate_noise_data(X_signals.shape, std=signal_rms)
-            y_signals = np.ones(len(X_signals))
-            y_noise = np.zeros(len(X_noise))
+                    if 'noise' in self.class_list[lbl].lower(): continue
+                    X_signals_list.append(X_snr[y_snr == lbl])
+                if not X_signals_list:
+                    del X_snr, y_snr; continue
+                X_signals = np.vstack(X_signals_list)
+                del X_signals_list
+                signal_rms = np.sqrt(np.mean(X_signals ** 2))
+                X_noise = self.generate_noise_data(X_signals.shape, std=signal_rms)
+                X_all = np.vstack([X_signals, X_noise])
+                y_signals = np.ones(len(X_signals), dtype=np.int32)
+                y_noise = np.zeros(len(X_noise), dtype=np.int32)
+                y_all = np.hstack([y_signals, y_noise])
+                del X_signals, X_noise, y_signals, y_noise
 
-            X_all = np.vstack([X_signals, X_noise])
-            y_all = np.hstack([y_signals, y_noise])
-            X_train, X_tmp, y_train, y_tmp = train_test_split(X_all, y_all, test_size=self.val_test_split_ratio, stratify=y_all)
-            X_val, X_test, y_val, y_test = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
-            X_tr_all.append(X_train); y_tr_all.append(y_train)
-            X_va_all.append(X_val); y_va_all.append(y_val)
-            X_te_all.append(X_test); y_te_all.append(y_test)
+                # 按 data_ratio 随机取子集
+                if self.data_ratio < 1.0:
+                    n_sub = max(1, int(len(X_all) * self.data_ratio))
+                    sub_idx = rng.choice(len(X_all), n_sub, replace=False)
+                    X_all = X_all[sub_idx]
+                    y_all = y_all[sub_idx]
+
+                indices = np.arange(len(X_all))
+                tr_idx, tmp_idx = train_test_split(indices, test_size=self.val_test_split_ratio, stratify=y_all, random_state=rng)
+                va_idx, te_idx = train_test_split(tmp_idx, test_size=0.5, stratify=y_all[tmp_idx], random_state=rng)
+                if len(tr_idx) > 0: tr_indices.append((X_all[tr_idx], y_all[tr_idx]))
+                if len(va_idx) > 0: va_indices.append((X_all[va_idx], y_all[va_idx]))
+                snr_te_indices[snr] = ([X_all[te_idx]], [y_all[te_idx]])
+                del X_snr, y_snr, X_all, y_all
 
         else:  # AMC / WTC
-            _snr_X_te, _snr_y_te = {}, {}
             for snr in self.snr_list:
                 idx_snr = np.where(z_all == snr)[0]
-                if len(idx_snr) == 0:
-                    continue
-                _snr_X_te[snr], _snr_y_te[snr] = [], []
+                if len(idx_snr) == 0: continue
                 X_snr = np.transpose(X_all_raw[idx_snr], (0, 2, 1))
                 y_snr = y_all_raw[idx_snr]
-                for idx, mod in enumerate(self.class_list):
-                    idx_mod = np.where(y_snr == idx)[0]
-                    if len(idx_mod) == 0:
-                        continue
-                    X_mod = X_snr[idx_mod]
-                    y_mod = np.ones(len(idx_mod)) * idx
-                    X_tr, X_tmp, y_tr, y_tmp = train_test_split(X_mod, y_mod, test_size=self.val_test_split_ratio, stratify=y_mod)
-                    X_va, X_te, y_va, y_te = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp)
-                    X_tr_all.append(X_tr); y_tr_all.append(y_tr)
-                    X_va_all.append(X_va); y_va_all.append(y_va)
-                    X_te_all.append(X_te); y_te_all.append(y_te)
-                    _snr_X_te[snr].append(X_te); _snr_y_te[snr].append(y_te)
-            for snr in self.snr_list:
-                if snr in _snr_X_te and _snr_X_te[snr]:
-                    self._snr_test_data[snr] = (np.vstack(_snr_X_te[snr]), np.hstack(_snr_y_te[snr]).astype(int))
+                snr_te_indices[snr] = ([], [])
+                for lbl in range(len(self.class_list)):
+                    idx_mod = np.where(y_snr == lbl)[0]
+                    if len(idx_mod) == 0: continue
+                    # 按 data_ratio 随机取子集
+                    if self.data_ratio < 1.0:
+                        n_sub = max(1, int(len(idx_mod) * self.data_ratio))
+                        idx_mod = idx_mod[rng.choice(len(idx_mod), n_sub, replace=False)]
+                    y_mod = np.full(len(idx_mod), lbl, dtype=np.int32)
+                    idx_shuf = rng.permutation(len(idx_mod))
+                    n_test = int(len(idx_mod) * self.val_test_split_ratio)
+                    n_va = n_test // 2; n_te = n_test - n_va; n_tr = len(idx_mod) - n_test
+                    tr_pos = idx_shuf[:n_tr]; tmp_pos = idx_shuf[n_tr:]
+                    va_pos = tmp_pos[:n_va]; te_pos = tmp_pos[n_va:]
+                    if n_tr > 0: tr_indices.append((X_snr[idx_mod[tr_pos]], y_mod[tr_pos]))
+                    if n_va > 0: va_indices.append((X_snr[idx_mod[va_pos]], y_mod[va_pos]))
+                    snr_te_indices[snr][0].append(X_snr[idx_mod[te_pos]])
+                    snr_te_indices[snr][1].append(y_mod[te_pos])
+                del X_snr, y_snr
 
-        X_train = np.vstack(X_tr_all)
-        y_train = np.hstack(y_tr_all).astype(int)
-        X_val = np.vstack(X_va_all)
-        y_val = np.hstack(y_va_all).astype(int)
-        X_test = np.vstack(X_te_all)
-        y_test = np.hstack(y_te_all).astype(int)
+        # 释放 HDF5
+        data.close()
+        del X_all_raw, y_all_raw, z_all
+        gc.collect()
+
+        # ============================================================
+        # Phase 2: 预分配数组，直接填充（无 list 累积 / 无 vstack）
+        # ============================================================
+        n_tr = sum(len(y) for _, y in tr_indices)
+        n_va = sum(len(y) for _, y in va_indices)
+        X_train = np.empty((n_tr, nc, sl), dtype=np.float32)
+        y_train = np.empty(n_tr, dtype=np.int64)
+        X_val   = np.empty((n_va, nc, sl), dtype=np.float32)
+        y_val   = np.empty(n_va, dtype=np.int64)
+
+        # 反向填充（pop 消费），避免 chunk 列表与预分配数组共存
+        tr_pos = n_tr
+        while tr_indices:
+            X_chunk, y_chunk = tr_indices.pop()
+            n = len(y_chunk)
+            tr_pos -= n
+            X_train[tr_pos:tr_pos+n] = X_chunk; y_train[tr_pos:tr_pos+n] = y_chunk
+        gc.collect()
+
+        va_pos = n_va
+        while va_indices:
+            X_chunk, y_chunk = va_indices.pop()
+            n = len(y_chunk)
+            va_pos -= n
+            X_val[va_pos:va_pos+n] = X_chunk; y_val[va_pos:va_pos+n] = y_chunk
+        gc.collect()
+
+        # 构建 _snr_test_data：直接预分配每个 SNR 的测试数据
+        for snr in list(snr_te_indices.keys()):
+            X_list, y_list = snr_te_indices[snr]
+            if not X_list: continue
+            X_te_snr = np.vstack(X_list) if len(X_list) > 1 else X_list[0]
+            y_te_snr = np.hstack(y_list).astype(int) if len(y_list) > 1 else y_list[0].astype(int)
+            self._snr_test_data[snr] = (X_te_snr, y_te_snr)
+        del snr_te_indices; gc.collect()
+
+        # 全局 X_test / y_test：从 _snr_test_data 拼接（所有任务统一）
+        if self._snr_test_data:
+            all_X = [v[0] for v in self._snr_test_data.values()]
+            all_y = [v[1] for v in self._snr_test_data.values()]
+            X_test = np.vstack(all_X) if len(all_X) > 1 else all_X[0]
+            y_test = np.hstack(all_y).astype(int) if len(all_y) > 1 else all_y[0].astype(int)
+            del all_X, all_y
+        else:
+            X_test = np.empty((0, nc, sl), dtype=np.float32)
+            y_test = np.empty(0, dtype=np.int64)
+
+        gc.collect()
 
         if self.task_name == 'WTC':
             y_train = self.process_labels(y_train, self.class_list)
@@ -466,13 +538,11 @@ class RML2018aDataLoader(BaseDataLoader):
                 self._snr_test_data[snr] = (X_s, self.process_labels(y_s, self.class_list))
 
         X_train, X_val, X_test = self.normalize(X_train, X_val, X_test)
-
-        # 构建按 SNR 分离的测试 DataLoader
         self._build_snr_test_loaders()
 
-        train_ds = ModulationFineTuningDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
-        val_ds = ModulationFineTuningDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
-        test_ds = ModulationFineTuningDataset(torch.FloatTensor(X_test), torch.LongTensor(y_test))
+        train_ds = ModulationFineTuningDataset(torch.from_numpy(X_train), torch.from_numpy(y_train))
+        val_ds   = ModulationFineTuningDataset(torch.from_numpy(X_val),   torch.from_numpy(y_val))
+        test_ds  = ModulationFineTuningDataset(torch.from_numpy(X_test),  torch.from_numpy(y_test))
         return self.get_data_loader(train_ds, val_ds, test_ds, batch_size, shuffle)
 
 # ================== AD Benchmark Datasets (MSL / PSM / SMAP / SMD) ==================

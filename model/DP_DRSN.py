@@ -6,7 +6,7 @@ import torch.nn.functional as F
 # 1. 软阈值收缩函数 (Garrote Shrinkage)
 # ==========================================
 class GarroteShrinkage(nn.Module):
-    """y=x-\tau^2\ \/x (|x|≥\tau)"""
+    r"""y=x-\tau^2 / x (|x|≥\tau)"""
     def __init__(self, eps=1e-6):
         super(GarroteShrinkage, self).__init__()
         self.eps = eps

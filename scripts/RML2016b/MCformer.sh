@@ -9,7 +9,7 @@ dataset="RML2016b"
 file_path="/root/autodl-tmp/dataset/RML2016.10b.dat"
 
 # SNR 列表：训练时合并所有 SNR，测试时逐 SNR 单独评估
-snr_list=($(seq -20 2 -20))
+snr_list=($(seq -20 2 18))
 
 # 任务列表：AMC(调制识别), WTC(技术识别), SS(频谱感知)
 tasks=("SS" "AMC" "WTC" )

@@ -12,7 +12,7 @@ file_path="/root/autodl-tmp/dataset/GOLD_XYZ_OSC.0001_1024.hdf5"
 snr_list=($(seq -20 2 30))
 
 # 任务列表：AMC(调制识别), WTC(技术识别), SS(频谱感知)
-tasks=("AMC" "WTC" "SS")
+tasks=("SS")
 
 # 1. 遍历任务
 for task in "${tasks[@]}"

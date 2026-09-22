@@ -147,17 +147,22 @@ class BaseExperiment(ABC):
             mode=self.mode, print_separator=True,
         )
 
-    def save_results(self, train_loss, train_acc, val_loss, val_acc, predictions, targets, accuracy, confusion_matrix, time_mean) -> None:
+    def save_results(self, train_loss, train_acc, val_loss, val_acc, predictions, targets, accuracy, confusion_matrix, time_mean, snr_accuracies=None, snr_confusion_matrices=None) -> None:
         results_path = self.checkpoint_path + "/results.pth"
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
-            self.accelerator.save(obj={
+            obj = {
                 "train_loss": torch.tensor(train_loss), "train_acc": torch.tensor(train_acc),
                 "val_loss": torch.tensor(val_loss), "val_acc": torch.tensor(val_acc),
                 "predictions": predictions, "targets": targets,
                 "accuracy": torch.tensor(accuracy), "confusion_matrix": confusion_matrix,
                 "time_mean": torch.tensor(time_mean),
-            }, f=results_path, safe_serialization=False)
+            }
+            if snr_accuracies is not None:
+                obj["snr_accuracies"] = snr_accuracies
+            if snr_confusion_matrices is not None:
+                obj["snr_confusion_matrices"] = snr_confusion_matrices
+            self.accelerator.save(obj=obj, f=results_path, safe_serialization=False)
         self.accelerator.print("Test results saved to " + results_path)
 
     def logging(self, time_now: str, accuracy: float, time_mean: Union[float, np.ndarray]) -> None:
@@ -244,6 +249,7 @@ class AMCExperiment(BaseExperiment):
 
         # ===== 按 SNR 分别测试 =====
         snr_accuracies = {}
+        snr_confusion_matrices = {}
         if hasattr(self, 'data_interface') and self.data_interface.snr_test_loaders:
             for snr, snr_loader in self.data_interface.snr_test_loaders.items():
                 snr_preds, snr_targets = [], []
@@ -256,12 +262,15 @@ class AMCExperiment(BaseExperiment):
                         snr_targets.append(batch_y)
                 snr_preds = torch.cat(snr_preds, dim=0)
                 snr_targets = torch.cat(snr_targets, dim=0)
-                snr_acc = torch.eq(torch.max(snr_preds, 1)[1], snr_targets).sum().item() / snr_targets.size(0)
+                snr_pred_labels = torch.max(snr_preds, 1)[1]
+                snr_acc = torch.eq(snr_pred_labels, snr_targets).sum().item() / snr_targets.size(0)
                 snr_accuracies[snr] = snr_acc
+                snr_conf_mat = get_confusion_matrix(snr_pred_labels, snr_targets, self.n_classes)
+                snr_confusion_matrices[snr] = snr_conf_mat
                 self.accelerator.print(f"  -> SNR {snr:3d} dB: Accuracy = {snr_acc:.4f}")
         # =============================
 
-        return accuracy, preds, targets, np.mean(times), snr_accuracies
+        return accuracy, preds, targets, np.mean(times), snr_accuracies, snr_confusion_matrices
 
     def run(self):
         early_stopping = EarlyStopping(accelerator=self.accelerator, patience=self.patience, verbose=True, delta=self.configs.delta)
@@ -276,9 +285,9 @@ class AMCExperiment(BaseExperiment):
             early_stopping(val_a, self.checkpoint_path)
             if early_stopping.early_stop: break
 
-        acc, preds, targets, t_mean, snr_accs = self.test()
+        acc, preds, targets, t_mean, snr_accs, snr_conf_mats = self.test()
         conf_mat = get_confusion_matrix(torch.max(preds, 1)[1], targets, self.n_classes)
-        self.save_results(t_loss, t_acc, v_loss, v_acc, preds, targets, acc, conf_mat, t_mean)
+        self.save_results(t_loss, t_acc, v_loss, v_acc, preds, targets, acc, conf_mat, t_mean, snr_accs, snr_conf_mats)
         if self.accelerator.is_main_process:
             # plot_loss_cruve(np.array(t_loss), v_loss, self.checkpoint_path)
             plot_accuracy_curve(np.array(t_acc), v_acc, self.checkpoint_path)
